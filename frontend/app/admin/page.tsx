@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+import { supabase } from "../../lib/supabase/client";
 
 type OrderItem = {
   id: string;
@@ -12,53 +14,14 @@ type OrderItem = {
   item: string;
   size: string;
   quantity: number;
-  status: "pending" | "paid" | "pickup";
+  status: "pending" | "paid";
   createdAt: string;
 };
 
-const mockOrders: OrderItem[] = [
-  {
-    id: "ARD-1024",
-    name: "Mika Dela Cruz",
-    email: "mika.dc@email.com",
-    phone: "0917 222 0134",
-    address: "Quezon City",
-    item: "Merch 02",
-    size: "M",
-    quantity: 2,
-    status: "pending",
-    createdAt: "2026-01-29",
-  },
-  {
-    id: "ARD-1027",
-    name: "Luis Santos",
-    email: "luis.santos@email.com",
-    phone: "0928 104 7788",
-    address: "Makati City",
-    item: "Merch 05",
-    size: "L",
-    quantity: 1,
-    status: "paid",
-    createdAt: "2026-02-02",
-  },
-  {
-    id: "ARD-1031",
-    name: "Trish Mendoza",
-    email: "trish.mendoza@email.com",
-    phone: "0905 310 1144",
-    address: "Pasig City",
-    item: "Merch 03",
-    size: "S",
-    quantity: 3,
-    status: "paid",
-    createdAt: "2026-02-05",
-  },
-];
 
 const statusStyles: Record<OrderItem["status"], string> = {
   pending: "bg-amber-400/20 text-amber-200 border-amber-400/40",
   paid: "bg-emerald-400/20 text-emerald-200 border-emerald-400/40",
-  pickup: "bg-sky-400/20 text-sky-200 border-sky-400/40",
 };
 
 export default function AdminPage() {
@@ -66,12 +29,96 @@ export default function AdminPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [orders, setOrders] = useState<OrderItem[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [ordersError, setOrdersError] = useState<string | null>(null);
+  const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
+  const loadOrders = async () => {
+    setOrdersLoading(true);
+    setOrdersError(null);
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) {
+      setOrdersError("Admin session expired. Please log in again.");
+      setOrders([]);
+      setOrdersLoading(false);
+      return;
+    }
+
+    const response = await fetch("/api/admin/orders", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as
+        | { error?: string }
+        | null;
+      setOrdersError(payload?.error || "Unable to load orders.");
+      setOrders([]);
+      setOrdersLoading(false);
+      return;
+    }
+
+    const payload = (await response.json()) as {
+      orders: Array<{
+        id: string;
+        full_name: string;
+        email: string;
+        phone: string;
+        address: string;
+        item_name: string;
+        size: string;
+        quantity: number;
+        status: OrderItem["status"];
+        created_at: string;
+      }>;
+    };
+
+    setOrders(
+      (payload.orders ?? []).map((order) => ({
+        id: order.id,
+        name: order.full_name,
+        email: order.email,
+        phone: order.phone,
+        address: order.address,
+        item: order.item_name,
+        size: order.size,
+        quantity: order.quantity,
+        status: order.status,
+        createdAt: order.created_at,
+      }))
+    );
+    setOrdersLoading(false);
+  };
+
+  useEffect(() => {
+    let isActive = true;
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (!isActive) {
+        return;
+      }
+      const isLoggedIn = Boolean(data.session);
+      setLoggedIn(isLoggedIn);
+      if (isLoggedIn) {
+        loadOrders();
+      }
+    });
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
   const filteredOrders = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    return mockOrders.filter((order) => {
+    return orders.filter((order) => {
       const matchesQuery =
         !normalized ||
         [
@@ -87,20 +134,20 @@ export default function AdminPage() {
         statusFilter === "all" || order.status === statusFilter;
       return matchesQuery && matchesStatus;
     });
-  }, [query, statusFilter]);
+  }, [orders, query, statusFilter]);
 
   const totalItems = useMemo(
-    () => mockOrders.reduce((sum, order) => sum + order.quantity, 0),
-    []
+    () => orders.reduce((sum, order) => sum + order.quantity, 0),
+    [orders]
   );
-  const totalOrders = useMemo(() => mockOrders.length, []);
+  const totalOrders = useMemo(() => orders.length, [orders]);
   const pendingCount = useMemo(
-    () => mockOrders.filter((order) => order.status === "pending").length,
-    []
+    () => orders.filter((order) => order.status === "pending").length,
+    [orders]
   );
   const paidCount = useMemo(
-    () => mockOrders.filter((order) => order.status === "paid").length,
-    []
+    () => orders.filter((order) => order.status === "paid").length,
+    [orders]
   );
 
   const handleLogin = (event: React.FormEvent<HTMLFormElement>) => {
@@ -110,7 +157,63 @@ export default function AdminPage() {
       return;
     }
     setError("");
-    setLoggedIn(true);
+    supabase.auth
+      .signInWithPassword({ email, password })
+      .then(({ error: authError }) => {
+        if (authError) {
+          setError("Invalid admin credentials.");
+          return;
+        }
+        setLoggedIn(true);
+        loadOrders();
+      });
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setLoggedIn(false);
+    setOrders([]);
+  };
+
+  const handleStatusChange = async (
+    orderId: string,
+    status: OrderItem["status"]
+  ) => {
+    setStatusUpdatingId(orderId);
+    setOrdersError(null);
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) {
+      setOrdersError("Admin session expired. Please log in again.");
+      setStatusUpdatingId(null);
+      return;
+    }
+
+    const response = await fetch("/api/admin/orders", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ id: orderId, status }),
+    });
+
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as
+        | { error?: string }
+        | null;
+      setOrdersError(payload?.error || "Unable to update status.");
+      setStatusUpdatingId(null);
+      return;
+    }
+
+    setOrders((prev) =>
+      prev.map((order) =>
+        order.id === orderId ? { ...order, status } : order
+      )
+    );
+    setStatusUpdatingId(null);
   };
 
   return (
@@ -123,7 +226,7 @@ export default function AdminPage() {
       </div>
 
       <main
-        className={`relative z-10 mx-auto flex min-h-screen w-full max-w-5xl flex-col px-6 py-16 ${
+        className={`relative z-10 mx-auto flex min-h-screen w-full max-w-7xl flex-col px-6 py-16 ${
           loggedIn ? "gap-10" : "items-center justify-center"
         }`}
       >
@@ -156,7 +259,7 @@ export default function AdminPage() {
                 </Link>
                 <button
                   type="button"
-                  onClick={() => setLoggedIn(false)}
+                  onClick={handleLogout}
                   className="rounded-full border border-white/20 px-4 py-2 text-xs uppercase tracking-[0.2em] text-white/70 transition hover:border-white/40 hover:text-white"
                 >
                   Log Out
@@ -319,8 +422,8 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              <div className="mt-5 overflow-hidden rounded-2xl border border-white/10">
-                <table className="w-full text-left text-sm text-white/80">
+              <div className="mt-5 overflow-x-auto rounded-2xl border border-white/10">
+                <table className="w-full min-w-[860px] text-left text-sm text-white/80">
                   <thead className="bg-white/5 text-xs uppercase tracking-[0.2em] text-white/60">
                     <tr>
                       <th className="px-4 py-3">Order</th>
@@ -366,13 +469,22 @@ export default function AdminPage() {
                           {order.quantity}
                         </td>
                         <td className="px-4 py-3">
-                          <span
-                            className={`inline-flex items-center rounded-full border px-3 py-1 text-xs uppercase tracking-[0.2em] ${
+                          <select
+                            value={order.status}
+                            onChange={(event) =>
+                              handleStatusChange(
+                                order.id,
+                                event.target.value as OrderItem["status"]
+                              )
+                            }
+                            disabled={statusUpdatingId === order.id}
+                            className={`appearance-none rounded-full border px-3 py-1 text-xs uppercase tracking-[0.2em] ${
                               statusStyles[order.status]
-                            }`}
+                            } disabled:opacity-60`}
                           >
-                            {order.status}
-                          </span>
+                            <option value="pending">Pending</option>
+                            <option value="paid">Paid</option>
+                          </select>
                         </td>
                         <td className="px-4 py-3 text-white/70">
                           {order.createdAt}
@@ -383,7 +495,13 @@ export default function AdminPage() {
                 </table>
               </div>
 
-              {filteredOrders.length === 0 ? (
+              {ordersLoading ? (
+                <p className="mt-4 text-sm text-white/60">
+                  Loading orders...
+                </p>
+              ) : ordersError ? (
+                <p className="mt-4 text-sm text-amber-200">{ordersError}</p>
+              ) : filteredOrders.length === 0 ? (
                 <p className="mt-4 text-sm text-white/60">
                   No orders match your search.
                 </p>

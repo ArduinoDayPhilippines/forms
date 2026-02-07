@@ -1,57 +1,110 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-const merchItems = [
-  {
-    name: "Merch 01",
-    tone: "from-teal-500/20 to-transparent",
-    tag: "Heavyweight",
-  },
-  {
-    name: "Merch 02",
-    tone: "from-amber-500/25 to-transparent",
-    tag: "Best Seller",
-  },
-  {
-    name: "Merch 03",
-    tone: "from-green-500/25 to-transparent",
-    tag: "New",
-  },
-  {
-    name: "Merch 04",
-    tone: "from-teal-400/20 to-transparent",
-    tag: "Adjustable",
-  },
-  {
-    name: "Merch 05",
-    tone: "from-amber-400/20 to-transparent",
-    tag: "Canvas",
-  },
-  {
-    name: "Merch 06",
-    tone: "from-green-400/25 to-transparent",
-    tag: "Limited",
-  },
-];
+import { supabase } from "../lib/supabase/client";
 
-const merchSizes = ["XS", "S", "M", "L", "XL", "XXL"] as const;
+type MerchItem = {
+  id: string;
+  name: string;
+  image: string;
+  tone: string;
+  tag: string;
+  sizes: string[];
+};
 
 type CartItem = {
+  itemId: string;
   name: string;
   size: string;
   quantity: number;
 };
 
 export default function Home() {
-  const [quantities, setQuantities] = useState<number[]>(() =>
-    merchItems.map(() => 0)
-  );
-  const [selectedSizes, setSelectedSizes] = useState<(string | null)[]>(() =>
-    merchItems.map(() => null)
-  );
+  const [merchItems, setMerchItems] = useState<MerchItem[]>([]);
+  const [merchLoading, setMerchLoading] = useState(true);
+  const [merchError, setMerchError] = useState<string | null>(null);
+  const [quantities, setQuantities] = useState<number[]>([]);
+  const [selectedSizes, setSelectedSizes] = useState<(string | null)[]>([]);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
+  const [sizeGuideOpen, setSizeGuideOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isActive = true;
+
+    const loadMerch = async () => {
+      setMerchLoading(true);
+      const { data, error } = await supabase
+        .from("merch_items")
+        .select("id,name,image,tone,tag,sizes")
+        .eq("is_active", true)
+        .order("sort_order", { ascending: true });
+
+      if (!isActive) {
+        return;
+      }
+
+      if (error) {
+        setMerchError("Unable to load merch right now.");
+        setMerchItems([]);
+      } else {
+        setMerchError(null);
+        setMerchItems(
+          (data ?? []).map((item) => ({
+            id: item.id,
+            name: item.name,
+            image: item.image,
+            tone: item.tone,
+            tag: item.tag,
+            sizes:
+              Array.isArray(item.sizes) && item.sizes.length > 0
+                ? item.sizes
+                : ["One Size"],
+          }))
+        );
+      }
+      setMerchLoading(false);
+    };
+
+    loadMerch();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    setQuantities((prev) =>
+      merchItems.map((_, index) => prev[index] ?? 0)
+    );
+    setSelectedSizes((prev) =>
+      merchItems.map(
+        (item, index) =>
+          prev[index] ?? (item.sizes.length === 1 ? item.sizes[0] : null)
+      )
+    );
+  }, [merchItems]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") {
+        return;
+      }
+      if (sizeGuideOpen) {
+        setSizeGuideOpen(false);
+      }
+      if (cartOpen) {
+        setCartOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [cartOpen, sizeGuideOpen]);
 
   const cartCount = useMemo(
     () => cartItems.reduce((total, item) => total + item.quantity, 0),
@@ -80,18 +133,25 @@ export default function Home() {
   };
 
   const addToCart = (index: number) => {
+    const merchItem = merchItems[index];
     const size = selectedSizes[index];
     const quantity = quantities[index];
+    if (!merchItem) {
+      return;
+    }
     if (!size || quantity <= 0) {
       return;
     }
 
     setCartItems((prev) => {
       const existingIndex = prev.findIndex(
-        (item) => item.name === merchItems[index].name && item.size === size
+        (item) => item.itemId === merchItem.id && item.size === size
       );
       if (existingIndex === -1) {
-        return [...prev, { name: merchItems[index].name, size, quantity }];
+        return [
+          ...prev,
+          { itemId: merchItem.id, name: merchItem.name, size, quantity },
+        ];
       }
       return prev.map((item, i) =>
         i === existingIndex
@@ -109,6 +169,57 @@ export default function Home() {
 
   const clearCart = () => {
     setCartItems([]);
+  };
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    setSubmitError(null);
+    setSubmitSuccess(null);
+
+    if (cartItems.length === 0) {
+      setSubmitError("Add items to your cart before submitting.");
+      return;
+    }
+
+    const formData = new FormData(form);
+    const fullName = String(formData.get("fullName") ?? "").trim();
+    const email = String(formData.get("email") ?? "").trim();
+    const phone = String(formData.get("contactNumber") ?? "").trim();
+    const address = String(formData.get("address") ?? "").trim();
+
+    if (!fullName || !email || !phone || !address) {
+      setSubmitError("Please complete all contact fields.");
+      return;
+    }
+
+    setSubmitting(true);
+
+    const orderRows = cartItems.map((item) => ({
+      full_name: fullName,
+      email,
+      phone,
+      address,
+      item_id: item.itemId,
+      item_name: item.name,
+      size: item.size,
+      quantity: item.quantity,
+      status: "pending" as const,
+    }));
+
+    const { error } = await supabase.from("orders").insert(orderRows);
+
+    if (error) {
+      setSubmitError("Unable to submit order. Please try again.");
+      setSubmitting(false);
+      return;
+    }
+
+    setCartItems([]);
+    setQuantities((prev) => prev.map(() => 0));
+    form.reset();
+    setSubmitSuccess("Order received! We'll email you with next steps.");
+    setSubmitting(false);
   };
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#050b0e] text-white">
@@ -153,6 +264,7 @@ export default function Home() {
             </a>
             <button
               type="button"
+              onClick={() => setSizeGuideOpen(true)}
               className="rounded-full border border-white/20 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-white/80 transition hover:border-white/40 hover:text-white"
             >
               View Sizing Guide
@@ -171,84 +283,115 @@ export default function Home() {
         </header>
 
         <section className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {merchItems.map((item, index) => (
-            <article
-              key={item.name}
-              className="glass-panel fade-up rounded-3xl p-6"
-            >
-              <div
-                className={`h-40 w-full rounded-2xl bg-gradient-to-br ${item.tone} border border-white/10`}
-              />
-              <div className="mt-5 flex items-start justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold text-white">
-                    {item.name}
-                  </h3>
-                  <p className="text-sm text-white/60">{item.tag}</p>
+          {merchLoading ? (
+            <div className="glass-panel fade-up rounded-3xl p-6 md:col-span-2 lg:col-span-3">
+              <p className="text-sm text-white/70">Loading merch...</p>
+            </div>
+          ) : merchError ? (
+            <div className="glass-panel fade-up rounded-3xl p-6 md:col-span-2 lg:col-span-3">
+              <p className="text-sm text-amber-200">{merchError}</p>
+            </div>
+          ) : merchItems.length === 0 ? (
+            <div className="glass-panel fade-up rounded-3xl p-6 md:col-span-2 lg:col-span-3">
+              <p className="text-sm text-white/70">
+                No merch is available yet.
+              </p>
+            </div>
+          ) : (
+            merchItems.map((item, index) => (
+              <article
+                key={item.id}
+                className="glass-panel fade-up rounded-3xl p-6"
+              >
+                <div
+                  className={`relative h-40 w-full overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br ${item.tone}`}
+                >
+                  <img
+                    src={item.image}
+                    alt={item.name}
+                    className="h-full w-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent" />
                 </div>
-              </div>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {merchSizes.map((size) => {
-                  const isSelected = selectedSizes[index] === size;
-                  return (
-                    <button
-                      key={size}
-                      type="button"
-                      onClick={() => selectSize(index, size)}
-                      className={`rounded-full border px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.2em] transition ${
-                        isSelected
-                          ? "border-emerald-300/80 bg-emerald-300/20 text-emerald-100"
-                          : "border-white/15 text-white/70 hover:border-white/40 hover:text-white"
-                      }`}
-                      aria-pressed={isSelected}
-                    >
-                      {size}
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="mt-6 flex items-center gap-3">
-                <div className="flex flex-1 items-center justify-between gap-2 rounded-full border border-white/20 px-3 py-2 text-xs uppercase tracking-[0.2em] text-white/60">
-                  <span>Qty</span>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => adjustQuantity(index, -1)}
-                      className="flex h-8 w-8 items-center justify-center rounded-full border border-white/20 text-base text-white/70 transition hover:border-white/40 hover:text-white"
-                    >
-                      -
-                    </button>
-                    <input
-                      type="number"
-                      min={0}
-                      value={quantities[index] ?? 0}
-                      onChange={(event) =>
-                        updateQuantity(index, Number(event.target.value))
-                      }
-                      className="w-12 bg-transparent text-center text-sm text-white focus:outline-none"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => adjustQuantity(index, 1)}
-                      className="flex h-8 w-8 items-center justify-center rounded-full border border-white/20 text-base text-white/70 transition hover:border-white/40 hover:text-white"
-                    >
-                      +
-                    </button>
+                <div className="mt-5 flex items-start justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-white">
+                      {item.name}
+                    </h3>
+                    <p className="text-sm text-white/60">{item.tag}</p>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => addToCart(index)}
-                  disabled={
-                    quantities[index] <= 0 || selectedSizes[index] === null
-                  }
-                  className="flex-1 rounded-full bg-white/10 px-4 py-2 text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-white transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  Add to Cart
-                </button>
-              </div>
-            </article>
-          ))}
+                {item.sizes.length === 1 ? (
+                  <div className="mt-4">
+                    <span className="inline-flex rounded-full border border-emerald-300/40 bg-emerald-300/15 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-emerald-100">
+                      {item.sizes[0]}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {item.sizes.map((size) => {
+                      const isSelected = selectedSizes[index] === size;
+                      return (
+                        <button
+                          key={size}
+                          type="button"
+                          onClick={() => selectSize(index, size)}
+                          className={`rounded-full border px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.2em] transition ${
+                            isSelected
+                              ? "border-emerald-300/80 bg-emerald-300/20 text-emerald-100"
+                              : "border-white/15 text-white/70 hover:border-white/40 hover:text-white"
+                          }`}
+                          aria-pressed={isSelected}
+                        >
+                          {size}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                <div className="mt-6 flex items-center gap-3">
+                  <div className="flex flex-1 items-center justify-between gap-2 rounded-full border border-white/20 px-3 py-2 text-xs uppercase tracking-[0.2em] text-white/60">
+                    <span>Qty</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => adjustQuantity(index, -1)}
+                        className="flex h-8 w-8 items-center justify-center rounded-full border border-white/20 text-base text-white/70 transition hover:border-white/40 hover:text-white"
+                      >
+                        -
+                      </button>
+                      <input
+                        type="number"
+                        min={0}
+                        value={quantities[index] ?? 0}
+                        onChange={(event) =>
+                          updateQuantity(index, Number(event.target.value))
+                        }
+                        className="w-12 bg-transparent text-center text-sm text-white focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => adjustQuantity(index, 1)}
+                        className="flex h-8 w-8 items-center justify-center rounded-full border border-white/20 text-base text-white/70 transition hover:border-white/40 hover:text-white"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => addToCart(index)}
+                    disabled={
+                      quantities[index] <= 0 || selectedSizes[index] === null
+                    }
+                    className="flex-1 rounded-full bg-white/10 px-4 py-2 text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-white transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Add to Cart
+                  </button>
+                </div>
+              </article>
+            ))
+          )}
         </section>
 
         <div
@@ -257,6 +400,40 @@ export default function Home() {
           }`}
           onClick={() => setCartOpen(false)}
         />
+        <div
+          className={`fixed inset-0 z-20 bg-black/60 transition ${
+            sizeGuideOpen ? "opacity-100" : "pointer-events-none opacity-0"
+          }`}
+          onClick={() => setSizeGuideOpen(false)}
+        />
+        <aside
+          role="dialog"
+          aria-modal="true"
+          aria-hidden={!sizeGuideOpen}
+          className={`fixed left-1/2 top-1/2 z-30 w-[90%] max-w-2xl -translate-x-1/2 -translate-y-1/2 transform rounded-3xl border border-white/10 bg-[#050b0e] p-6 transition duration-300 ${
+            sizeGuideOpen
+              ? "scale-100 opacity-100"
+              : "pointer-events-none scale-95 opacity-0"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-white">Sizing Guide</h3>
+            <button
+              type="button"
+              onClick={() => setSizeGuideOpen(false)}
+              className="rounded-full border border-white/20 px-3 py-1 text-xs uppercase tracking-[0.2em] text-white/70 transition hover:border-white/40 hover:text-white"
+            >
+              Close
+            </button>
+          </div>
+          <div className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+            <img
+              src="/shirt_size.jpg"
+              alt="Shirt sizing guide"
+              className="h-full w-full object-contain"
+            />
+          </div>
+        </aside>
         <aside
           className={`fixed right-0 top-0 z-30 h-full w-full max-w-md transform border-l border-white/10 bg-[#050b0e] p-6 transition duration-300 ${
             cartOpen ? "translate-x-0" : "translate-x-full"
@@ -353,7 +530,7 @@ export default function Home() {
               </div>
             </div>
 
-            <form className="flex flex-col gap-5">
+            <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
               <label className="text-sm text-white/80">
                 Full Name
                 <input
@@ -398,11 +575,23 @@ export default function Home() {
                 />
               </label>
 
+              {submitError ? (
+                <p className="text-xs uppercase tracking-[0.2em] text-amber-300">
+                  {submitError}
+                </p>
+              ) : null}
+              {submitSuccess ? (
+                <p className="text-xs uppercase tracking-[0.2em] text-emerald-300">
+                  {submitSuccess}
+                </p>
+              ) : null}
+
               <button
                 type="submit"
-                className="mt-2 rounded-full bg-gradient-to-r from-teal-500 via-green-500 to-amber-400 px-6 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-black transition hover:brightness-110"
+                disabled={submitting}
+                className="mt-2 rounded-full bg-gradient-to-r from-teal-500 via-green-500 to-amber-400 px-6 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-black transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Submit Order
+                {submitting ? "Submitting..." : "Submit Order"}
               </button>
             </form>
           </div>
