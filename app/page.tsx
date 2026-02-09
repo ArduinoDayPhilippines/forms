@@ -24,6 +24,7 @@ type CartItem = {
 
 const GCASH_BUCKET = "gcash-receipts";
 const MAX_RECEIPT_SIZE = 5 * 1024 * 1024;
+const CART_STORAGE_KEY = "adph-cart-items";
 
 export default function Home() {
   const [merchItems, setMerchItems] = useState<MerchItem[]>([]);
@@ -31,9 +32,39 @@ export default function Home() {
   const [merchError, setMerchError] = useState<string | null>(null);
   const [quantities, setQuantities] = useState<number[]>([]);
   const [selectedSizes, setSelectedSizes] = useState<(string | null)[]>([]);
-  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [cartItems, setCartItems] = useState<CartItem[]>(() => {
+    if (typeof window === "undefined") {
+      return [];
+    }
+
+    const stored = window.localStorage.getItem(CART_STORAGE_KEY);
+    if (!stored) {
+      return [];
+    }
+
+    try {
+      const parsed = JSON.parse(stored) as CartItem[];
+      return Array.isArray(parsed)
+        ? parsed.filter(
+            (item) =>
+              item &&
+              typeof item.itemId === "string" &&
+              typeof item.name === "string" &&
+              typeof item.price === "number" &&
+              typeof item.size === "string" &&
+              typeof item.quantity === "number" &&
+              item.quantity > 0
+          )
+        : [];
+    } catch {
+      window.localStorage.removeItem(CART_STORAGE_KEY);
+      return [];
+    }
+  });
   const [cartOpen, setCartOpen] = useState(false);
   const [sizeGuideOpen, setSizeGuideOpen] = useState(false);
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [confirmationOpen, setConfirmationOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
@@ -58,19 +89,28 @@ export default function Home() {
         setMerchItems([]);
       } else {
         setMerchError(null);
-        setMerchItems(
-          (data ?? []).map((item) => ({
-            id: item.id,
-            name: item.name,
-            image: item.image,
-            tone: item.tone,
-            tag: item.tag,
-            price: Number(item.price ?? 0),
-            sizes:
-              Array.isArray(item.sizes) && item.sizes.length > 0
-                ? item.sizes
-                : ["One Size"],
-          }))
+        const nextItems = (data ?? []).map((item) => ({
+          id: item.id,
+          name: item.name,
+          image: item.image,
+          tone: item.tone,
+          tag: item.tag,
+          price: Number(item.price ?? 0),
+          sizes:
+            Array.isArray(item.sizes) && item.sizes.length > 0
+              ? item.sizes
+              : ["One Size"],
+        }));
+
+        setMerchItems(nextItems);
+        setQuantities((prev) =>
+          nextItems.map((_, index) => prev[index] ?? 0)
+        );
+        setSelectedSizes((prev) =>
+          nextItems.map(
+            (item, index) =>
+              prev[index] ?? (item.sizes.length === 1 ? item.sizes[0] : null)
+          )
         );
       }
       setMerchLoading(false);
@@ -84,16 +124,20 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    setQuantities((prev) =>
-      merchItems.map((_, index) => prev[index] ?? 0)
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    if (cartItems.length === 0) {
+      window.localStorage.removeItem(CART_STORAGE_KEY);
+      return;
+    }
+
+    window.localStorage.setItem(
+      CART_STORAGE_KEY,
+      JSON.stringify(cartItems)
     );
-    setSelectedSizes((prev) =>
-      merchItems.map(
-        (item, index) =>
-          prev[index] ?? (item.sizes.length === 1 ? item.sizes[0] : null)
-      )
-    );
-  }, [merchItems]);
+  }, [cartItems]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -106,11 +150,17 @@ export default function Home() {
       if (cartOpen) {
         setCartOpen(false);
       }
+      if (checkoutOpen) {
+        setCheckoutOpen(false);
+      }
+      if (confirmationOpen) {
+        setConfirmationOpen(false);
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [cartOpen, sizeGuideOpen]);
+  }, [cartOpen, sizeGuideOpen, checkoutOpen, confirmationOpen]);
 
   const cartCount = useMemo(
     () => cartItems.reduce((total, item) => total + item.quantity, 0),
@@ -200,6 +250,9 @@ export default function Home() {
     const phone = String(formData.get("contactNumber") ?? "").trim();
     const address = String(formData.get("address") ?? "").trim();
     const paymentMethod = String(formData.get("paymentMethod") ?? "gcash");
+    const fulfillmentMethod = String(
+      formData.get("fulfillmentMethod") ?? "pickup"
+    );
     const gcashReference = String(
       formData.get("gcashReference") ?? ""
     ).trim();
@@ -212,6 +265,11 @@ export default function Home() {
 
     if (paymentMethod !== "gcash") {
       setSubmitError("Select GCash as your payment method.");
+      return;
+    }
+
+    if (fulfillmentMethod !== "pickup" && fulfillmentMethod !== "delivery") {
+      setSubmitError("Select pickup or delivery for your order.");
       return;
     }
 
@@ -262,6 +320,7 @@ export default function Home() {
       phone,
       address,
       payment_method: "gcash",
+      fulfillment_method: fulfillmentMethod,
       gcash_reference: gcashReference,
       gcash_receipt_url: receiptUrl,
       item_id: item.itemId,
@@ -276,7 +335,11 @@ export default function Home() {
     const { error } = await supabase.from("orders").insert(orderRows);
 
     if (error) {
-      setSubmitError("Unable to submit order. Please try again.");
+      setSubmitError(
+        error.message
+          ? `Unable to submit order: ${error.message}`
+          : "Unable to submit order. Please try again."
+      );
       setSubmitting(false);
       return;
     }
@@ -285,6 +348,8 @@ export default function Home() {
     setQuantities((prev) => prev.map(() => 0));
     form.reset();
     setSubmitSuccess("Order received! We'll verify your GCash receipt.");
+    setCheckoutOpen(false);
+    setConfirmationOpen(true);
     setSubmitting(false);
   };
   return (
@@ -348,7 +413,7 @@ export default function Home() {
           </div>
         </header>
 
-        <section className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <section className="grid gap-8 md:grid-cols-2 xl:grid-cols-3">
           {merchLoading ? (
             <div className="glass-panel fade-up rounded-3xl p-6 md:col-span-2 lg:col-span-3">
               <p className="text-sm text-white/70">Loading merch...</p>
@@ -367,10 +432,10 @@ export default function Home() {
             merchItems.map((item, index) => (
               <article
                 key={item.id}
-                className="glass-panel fade-up rounded-3xl p-6"
+                className="glass-panel fade-up rounded-3xl p-7"
               >
                 <div
-                  className={`relative h-40 w-full overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br ${item.tone}`}
+                  className={`relative h-52 w-full overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br ${item.tone}`}
                 >
                   <img
                     src={item.image}
@@ -480,6 +545,18 @@ export default function Home() {
           }`}
           onClick={() => setSizeGuideOpen(false)}
         />
+        <div
+          className={`fixed inset-0 z-20 bg-black/60 transition ${
+            checkoutOpen ? "opacity-100" : "pointer-events-none opacity-0"
+          }`}
+          onClick={() => setCheckoutOpen(false)}
+        />
+        <div
+          className={`fixed inset-0 z-20 bg-black/60 transition ${
+            confirmationOpen ? "opacity-100" : "pointer-events-none opacity-0"
+          }`}
+          onClick={() => setConfirmationOpen(false)}
+        />
         <aside
           role="dialog"
           aria-modal="true"
@@ -502,7 +579,7 @@ export default function Home() {
           </div>
           <div className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-white/5">
             <img
-              src="/shirt_size.jpg"
+              src="/shirt_size.png"
               alt="Shirt sizing guide"
               className="h-full w-full object-contain"
             />
@@ -567,9 +644,7 @@ export default function Home() {
               type="button"
               onClick={() => {
                 setCartOpen(false);
-                document.getElementById("order-form")?.scrollIntoView({
-                  behavior: "smooth",
-                });
+                setCheckoutOpen(true);
               }}
               className="rounded-full bg-gradient-to-r from-teal-500 via-green-500 to-amber-400 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-black transition hover:brightness-110"
             >
@@ -586,15 +661,31 @@ export default function Home() {
           </div>
         </aside>
 
-        <section id="order-form" className="scroll-mt-24">
-          <div className="glass-panel fade-up grid gap-8 rounded-3xl p-8 lg:grid-cols-[1.1fr_1fr]">
+        <aside
+          role="dialog"
+          aria-modal="true"
+          aria-hidden={!checkoutOpen}
+          className={`checkout-scroll fixed left-1/2 top-1/2 z-30 max-h-[85vh] w-[92%] max-w-4xl -translate-x-1/2 -translate-y-1/2 transform overflow-y-auto rounded-3xl border border-white/10 bg-[#050b0e] p-6 transition duration-300 ${
+            checkoutOpen
+              ? "scale-100 opacity-100"
+              : "pointer-events-none scale-95 opacity-0"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-white">Place Your Order</h3>
+            <button
+              type="button"
+              onClick={() => setCheckoutOpen(false)}
+              className="rounded-full border border-white/20 px-3 py-1 text-xs uppercase tracking-[0.2em] text-white/70 transition hover:border-white/40 hover:text-white"
+            >
+              Close
+            </button>
+          </div>
+          <div className="mt-4 grid gap-8 lg:grid-cols-[1.1fr_1fr]">
             <div>
-              <h2 className="text-3xl font-semibold text-white">
-                Place Your Order
-              </h2>
-              <p className="mt-3 text-sm leading-6 text-white/70">
-                Fill up the form below and attach your GCash receipt to confirm
-                your merch order.
+              <p className="text-sm leading-6 text-white/70">
+                Fill up the form and attach your GCash receipt to confirm your
+                merch order.
               </p>
               <div className="mt-6 grid gap-4 text-xs uppercase tracking-[0.25em] text-white/60">
                 <div className="flex items-center gap-3">
@@ -648,6 +739,31 @@ export default function Home() {
                   className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-white/40 focus:border-emerald-300/70 focus:outline-none focus:ring-2 focus:ring-emerald-300/30"
                 />
               </label>
+
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-xs uppercase tracking-[0.2em] text-white/60">
+                  Fulfillment Method
+                </p>
+                <label className="mt-3 flex items-center gap-3 text-sm text-white/80">
+                  <input
+                    type="radio"
+                    name="fulfillmentMethod"
+                    value="pickup"
+                    defaultChecked
+                    className="h-4 w-4 border-white/30 bg-white/10 text-emerald-300 focus:ring-emerald-300/40"
+                  />
+                  Pickup
+                </label>
+                <label className="mt-2 flex items-center gap-3 text-sm text-white/80">
+                  <input
+                    type="radio"
+                    name="fulfillmentMethod"
+                    value="delivery"
+                    className="h-4 w-4 border-white/30 bg-white/10 text-emerald-300 focus:ring-emerald-300/40"
+                  />
+                  Delivery
+                </label>
+              </div>
 
               <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
                 <p className="text-xs uppercase tracking-[0.2em] text-white/60">
@@ -710,7 +826,52 @@ export default function Home() {
               </button>
             </form>
           </div>
-        </section>
+        </aside>
+
+        <aside
+          role="dialog"
+          aria-modal="true"
+          aria-hidden={!confirmationOpen}
+          className={`fixed left-1/2 top-1/2 z-30 w-[90%] max-w-md -translate-x-1/2 -translate-y-1/2 transform rounded-3xl border border-white/10 bg-[#050b0e] p-6 text-center transition duration-300 ${
+            confirmationOpen
+              ? "scale-100 opacity-100"
+              : "pointer-events-none scale-95 opacity-0"
+          }`}
+        >
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-emerald-300/50 bg-emerald-300/15">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              aria-hidden="true"
+              className="h-7 w-7 text-emerald-300"
+            >
+              <path
+                d="M5 12.5l4.5 4.5L19 7.5"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </div>
+          <h3 className="mt-4 text-lg font-semibold text-white">
+            Order submitted successfully
+          </h3>
+          <p className="mt-2 text-sm text-white/70">
+            We received your order and will verify your GCash receipt shortly.
+          </p>
+          <button
+            type="button"
+            onClick={() => setConfirmationOpen(false)}
+            className="mt-5 rounded-full border border-white/20 px-6 py-2 text-xs uppercase tracking-[0.2em] text-white/80 transition hover:border-white/40 hover:text-white"
+          >
+            Close
+          </button>
+        </aside>
+
+        <footer className="mt-8 border-t border-white/10 pt-6 text-center text-xs uppercase tracking-[0.2em] text-white/60">
+          Arduino Day Philippines 2026 · Merch Orders
+        </footer>
       </main>
     </div>
   );
