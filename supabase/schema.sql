@@ -35,15 +35,18 @@ create table if not exists public.orders (
   fulfillment_method text not null default 'pickup',
   gcash_reference text not null,
   gcash_receipt_url text not null,
-  item_id uuid references public.merch_items(id),
-  item_name text not null,
-  size text not null,
-  quantity integer not null check (quantity > 0),
-  unit_price numeric(10,2) not null default 0,
-  line_total numeric(10,2) not null default 0,
+  items jsonb not null default '[]'::jsonb,
   status public.order_status not null default 'pending',
   created_at timestamptz not null default now()
 );
+
+alter table public.orders add column if not exists items jsonb not null default '[]'::jsonb;
+alter table public.orders drop column if exists item_id;
+alter table public.orders drop column if exists item_name;
+alter table public.orders drop column if exists size;
+alter table public.orders drop column if exists quantity;
+alter table public.orders drop column if exists unit_price;
+alter table public.orders drop column if exists line_total;
 
 alter table public.merch_items enable row level security;
 alter table public.orders enable row level security;

@@ -323,7 +323,16 @@ export default function Home() {
       .from(GCASH_BUCKET)
       .getPublicUrl(uploadPath).data.publicUrl;
 
-    const orderRows = cartItems.map((item) => ({
+    const orderItems = cartItems.map((item) => ({
+      item_id: item.itemId,
+      name: item.name,
+      size: item.size,
+      quantity: item.quantity,
+      unit_price: item.price,
+      line_total: item.price * item.quantity,
+    }));
+
+    const orderPayload = {
       full_name: fullName,
       email,
       phone,
@@ -332,16 +341,11 @@ export default function Home() {
       fulfillment_method: fulfillmentMethod,
       gcash_reference: gcashReference,
       gcash_receipt_url: receiptUrl,
-      item_id: item.itemId,
-      item_name: item.name,
-      size: item.size,
-      quantity: item.quantity,
-      unit_price: item.price,
-      line_total: item.price * item.quantity,
+      items: orderItems,
       status: "pending" as const,
-    }));
+    };
 
-    const { error } = await supabase.from("orders").insert(orderRows);
+    const { error } = await supabase.from("orders").insert(orderPayload);
 
     if (error) {
       setSubmitError(

@@ -4,6 +4,14 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase/client";
 
+type OrderLine = {
+  name: string;
+  size: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+};
+
 type OrderItem = {
   id: string;
   name: string;
@@ -13,11 +21,10 @@ type OrderItem = {
   paymentMethod: string;
   gcashReference: string;
   gcashReceiptUrl: string;
-  item: string;
-  size: string;
-  quantity: number;
-  unitPrice: number;
-  lineTotal: number;
+  items: OrderLine[];
+  itemsSummary: string;
+  itemCount: number;
+  subtotal: number;
   status:
     | "pending"
     | "paid"
@@ -81,24 +88,58 @@ export default function AdminPage() {
 
       const payload = await response.json();
       setOrders(
-        (payload.orders ?? []).map((order: any) => ({
-          id: order.id,
-          name: order.full_name,
-          email: order.email,
-          phone: order.phone,
-          address: order.address,
-          paymentMethod: order.payment_method,
-          gcashReference: order.gcash_reference,
-          gcashReceiptUrl: order.gcash_receipt_url,
-          item: order.item_name,
-          size: order.size,
-          quantity: order.quantity,
-          unitPrice: Number(order.unit_price ?? 0),
-          lineTotal: Number(order.line_total ?? 0),
-          status: order.status,
-          fulfillment: order.fulfillment_method,
-          createdAt: order.created_at,
-        })),
+        (payload.orders ?? []).map((order: any) => {
+          const rawItems = Array.isArray(order.items) ? order.items : [];
+          const items = rawItems
+            .map((item: any) => ({
+              name: String(item?.name ?? ""),
+              size: String(item?.size ?? ""),
+              quantity: Number(item?.quantity ?? 0),
+              unitPrice: Number(item?.unit_price ?? item?.unitPrice ?? 0),
+              lineTotal: Number(item?.line_total ?? item?.lineTotal ?? 0),
+            }))
+            .filter(
+              (item) =>
+                item.name &&
+                item.size &&
+                Number.isFinite(item.quantity) &&
+                item.quantity > 0,
+            );
+          const itemCount = items.reduce(
+            (sum, item) => sum + item.quantity,
+            0,
+          );
+          const subtotal = items.reduce(
+            (sum, item) => sum + item.lineTotal,
+            0,
+          );
+          const itemsSummary = items.length
+            ? items
+                .map(
+                  (item) =>
+                    `${item.name} (${item.size}) x${item.quantity}`,
+                )
+                .join(" · ")
+            : "No items";
+
+          return {
+            id: order.id,
+            name: order.full_name,
+            email: order.email,
+            phone: order.phone,
+            address: order.address,
+            paymentMethod: order.payment_method,
+            gcashReference: order.gcash_reference,
+            gcashReceiptUrl: order.gcash_receipt_url,
+            items,
+            itemsSummary,
+            itemCount,
+            subtotal,
+            status: order.status,
+            fulfillment: order.fulfillment_method,
+            createdAt: order.created_at,
+          };
+        }),
       );
     } catch (err) {
       setOrdersError("A network error occurred.");
@@ -125,7 +166,7 @@ export default function AdminPage() {
     return orders.filter((order) => {
       const matchesQuery =
         !normalized ||
-        [order.id, order.name, order.email, order.item].some((f) =>
+        [order.id, order.name, order.email, order.itemsSummary].some((f) =>
           f?.toLowerCase().includes(normalized),
         );
       const matchesStatus =
@@ -137,7 +178,7 @@ export default function AdminPage() {
   const stats = useMemo(
     () => ({
       total: orders.length,
-      items: orders.reduce((sum, o) => sum + o.quantity, 0),
+      items: orders.reduce((sum, o) => sum + o.itemCount, 0),
       pending: orders.filter((o) => o.status === "pending").length,
       confirmed: orders.filter((o) => o.status === "confirmed").length,
     }),
@@ -194,8 +235,8 @@ export default function AdminPage() {
     const headers = [
       "Order ID",
       "Customer",
-      "Item",
-      "Qty",
+      "Items",
+      "Item Count",
       "Total",
       "Fulfillment",
       "Status",
@@ -204,9 +245,9 @@ export default function AdminPage() {
     const rows = filteredOrders.map((o) => [
       o.id,
       o.name,
-      o.item,
-      o.quantity,
-      o.lineTotal,
+      o.itemsSummary,
+      o.itemCount,
+      o.subtotal,
       o.fulfillment,
       o.status,
       o.createdAt,
@@ -328,7 +369,7 @@ export default function AdminPage() {
                   <thead className="border-b border-white/10 text-white/40">
                     <tr>
                       <th className="pb-4">Order / Customer</th>
-                      <th className="pb-4">Item</th>
+                      <th className="pb-4">Items</th>
                       <th className="pb-4">Total</th>
                       <th className="pb-4">Fulfillment</th>
                       <th className="pb-4">Status</th>
@@ -344,10 +385,10 @@ export default function AdminPage() {
                             {order.id}
                           </div>
                         </td>
-                        <td className="py-4">
-                          {order.item} ({order.size})
+                        <td className="py-4 text-white/80">
+                          {order.itemsSummary}
                         </td>
-                        <td className="py-4">PHP {order.lineTotal}</td>
+                        <td className="py-4">PHP {order.subtotal}</td>
                         <td className="py-4 capitalize">{order.fulfillment}</td>
                         <td className="py-4">
                           <select
