@@ -514,6 +514,7 @@ export default function Home() {
                     fill
                     className="object-cover"
                     sizes="(min-width: 1280px) 33vw, (min-width: 768px) 50vw, 100vw"
+                    priority={index === 0}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent" />
                 </button>
