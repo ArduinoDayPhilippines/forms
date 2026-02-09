@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 
 import { supabase } from "../lib/supabase/client";
@@ -164,6 +165,14 @@ export default function Home() {
 
   const cartCount = useMemo(
     () => cartItems.reduce((total, item) => total + item.quantity, 0),
+    [cartItems]
+  );
+  const cartSubtotal = useMemo(
+    () =>
+      cartItems.reduce(
+        (total, item) => total + item.price * item.quantity,
+        0
+      ),
     [cartItems]
   );
 
@@ -437,10 +446,12 @@ export default function Home() {
                 <div
                   className={`relative h-52 w-full overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br ${item.tone}`}
                 >
-                  <img
+                  <Image
                     src={item.image}
                     alt={item.name}
-                    className="h-full w-full object-cover"
+                    fill
+                    className="object-cover"
+                    sizes="(min-width: 1280px) 33vw, (min-width: 768px) 50vw, 100vw"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent" />
                 </div>
@@ -561,7 +572,7 @@ export default function Home() {
           role="dialog"
           aria-modal="true"
           aria-hidden={!sizeGuideOpen}
-          className={`fixed left-1/2 top-1/2 z-30 w-[90%] max-w-2xl -translate-x-1/2 -translate-y-1/2 transform rounded-3xl border border-white/10 bg-[#050b0e] p-6 transition duration-300 ${
+          className={`fixed left-1/2 top-1/2 z-30 max-h-[85vh] w-[92%] max-w-4xl -translate-x-1/2 -translate-y-1/2 transform overflow-y-auto rounded-3xl border border-white/10 bg-[#050b0e] p-6 transition duration-300 ${
             sizeGuideOpen
               ? "scale-100 opacity-100"
               : "pointer-events-none scale-95 opacity-0"
@@ -577,12 +588,35 @@ export default function Home() {
               Close
             </button>
           </div>
-          <div className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-white/5">
-            <img
-              src="/shirt_size.png"
-              alt="Shirt sizing guide"
-              className="h-full w-full object-contain"
-            />
+          <div className="mt-5 grid gap-4 md:grid-cols-2">
+            <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-4">
+              <h4 className="text-xs font-semibold uppercase tracking-[0.2em] text-white/70">
+                Shirt Sizing
+              </h4>
+              <div className="relative mt-3 aspect-[4/3] w-full">
+                <Image
+                  src="/shirt_size.png"
+                  alt="Shirt sizing guide"
+                  fill
+                  className="object-contain"
+                  sizes="(min-width: 768px) 50vw, 100vw"
+                />
+              </div>
+            </div>
+            <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-4">
+              <h4 className="text-xs font-semibold uppercase tracking-[0.2em] text-white/70">
+                Vest Sizing
+              </h4>
+              <div className="relative mt-3 aspect-[4/3] w-full">
+                <Image
+                  src="/vest_size.png"
+                  alt="Vest sizing guide"
+                  fill
+                  className="object-contain"
+                  sizes="(min-width: 768px) 50vw, 100vw"
+                />
+              </div>
+            </div>
           </div>
         </aside>
         <aside
@@ -637,6 +671,15 @@ export default function Home() {
               Items
             </span>
             <span className="text-sm font-semibold text-white">{cartCount}</span>
+          </div>
+
+          <div className="mt-3 flex items-center justify-between">
+            <span className="text-xs uppercase tracking-[0.2em] text-white/60">
+              Subtotal
+            </span>
+            <span className="text-sm font-semibold text-white">
+              PHP {cartSubtotal.toFixed(0)}
+            </span>
           </div>
 
           <div className="mt-6 flex flex-col gap-3">
