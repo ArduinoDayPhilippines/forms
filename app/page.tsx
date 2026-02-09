@@ -79,6 +79,8 @@ export default function Home() {
   const [privacyConsent, setPrivacyConsent] = useState(false);
   const [fulfillment, setFulfillment] = useState<"pickup" | "delivery">("pickup");
   const [region, setRegion] = useState<"ncr" | "luzon" | "visayas" | "mindanao">("ncr");
+  const [activeFilter, setActiveFilter] = useState<"all" | "sets" | "individual">("all");
+  const [sortBy, setSortBy] = useState<"default" | "price-asc" | "price-desc">("default");
 
   useEffect(() => {
     let isActive = true;
@@ -200,6 +202,24 @@ export default function Home() {
       ),
     [cartItems]
   );
+
+  const filteredItems = useMemo(() => {
+    let items = merchItems.map((item, originalIndex) => ({ ...item, originalIndex }));
+
+    if (activeFilter === "sets") {
+      items = items.filter((item) => item.tag !== "Individual Item");
+    } else if (activeFilter === "individual") {
+      items = items.filter((item) => item.tag === "Individual Item");
+    }
+
+    if (sortBy === "price-asc") {
+      items = [...items].sort((a, b) => a.price - b.price);
+    } else if (sortBy === "price-desc") {
+      items = [...items].sort((a, b) => b.price - a.price);
+    }
+
+    return items;
+  }, [merchItems, activeFilter, sortBy]);
 
   const adjustQuantity = (index: number, delta: number) => {
     setQuantities((prev) =>
@@ -436,77 +456,135 @@ export default function Home() {
   return (
     <div className="relative min-h-screen bg-[#0a1116] text-white">
       {/* ── Sticky Navbar ── */}
-      <nav className="sticky top-0 z-20 border-b border-white/8 bg-[#0d1a1f]/95 backdrop-blur-md">
-        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 lg:px-6">
-          <a href="#" className="font-display text-xl leading-none text-[#00878F]">
-            Arduino Day PH
-          </a>
+      <nav className="sticky top-0 z-20 bg-[#0a1116]/80 backdrop-blur-xl">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 lg:px-6">
+          {/* Brand */}
+          <div className="flex items-center gap-3">
+            <a href="#" className="font-display text-2xl leading-none text-white tracking-wide">
+              <span className="text-[#00878F]">A</span>
+              <span className="text-[#E47128]">D</span>
+              <span className="text-[#21935B]">PH</span>
+            </a>
+            <div className="hidden h-5 w-px bg-white/10 sm:block" />
+            <span className="hidden text-[0.7rem] uppercase tracking-widest text-white/30 sm:block">
+              Merch Store
+            </span>
+          </div>
 
-          <div className="flex items-center gap-2">
+          {/* Nav actions */}
+          <div className="flex items-center gap-1.5">
             <button
               type="button"
               onClick={() => setSizeGuideOpen(true)}
-              className="rounded-md px-3 py-1.5 text-xs text-white/50 transition hover:bg-white/5 hover:text-white"
+              className="flex items-center gap-1.5 rounded-full px-3.5 py-2 text-xs text-white/50 transition hover:bg-white/5 hover:text-white"
             >
-              Size Guide
+              <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden="true">
+                <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span className="hidden sm:inline">Size Guide</span>
             </button>
+
             <button
               type="button"
               onClick={() => setCartOpen(true)}
-              className="relative flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm text-white/70 transition hover:border-white/20 hover:text-white"
+              className="relative flex items-center gap-2 rounded-full bg-white/5 px-4 py-2 text-sm text-white/70 transition hover:bg-white/10 hover:text-white"
             >
-              <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" className="h-4.5 w-4.5" aria-hidden="true">
                 <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 <path d="M3 6h18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 <path d="M16 10a4 4 0 01-8 0" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              Cart
+              <span className="hidden sm:inline">Cart</span>
               {cartCount > 0 && (
-                <span className="flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-[#E47128] px-1.5 text-[0.65rem] font-bold text-white">
+                <span className="flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-[#E47128] px-1.5 text-[0.6rem] font-bold text-white">
                   {cartCount}
                 </span>
               )}
             </button>
           </div>
         </div>
+        {/* Bottom divider with brand gradient */}
+        <div className="h-px w-full bg-gradient-to-r from-transparent via-[#00878F]/30 to-transparent" />
       </nav>
 
-      {/* ── Hero Banner ── */}
-      <section className="border-b border-white/5 bg-[#081214]">
-        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-8 sm:flex-row sm:items-center sm:justify-between lg:px-6 lg:py-10">
-          <div>
-            <h1 className="font-display text-balance text-3xl leading-tight sm:text-4xl">
-              <span className="text-[#00878F]">Arduino </span>
-              <span className="text-[#E47128]">Day </span>
-              <span className="text-[#21935B]">Philippines </span>
-              <span className="text-white">2026</span>
-            </h1>
-            <p className="mt-2 max-w-md text-sm leading-relaxed text-white/50">
-              Official merch for builders, creators, and tinkerers. Limited stock -- order now for pickup or delivery.
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="flex flex-col items-end gap-1 text-right text-xs text-white/40">
-              <span className="flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#E47128]" />
-                March 21, 2026
-              </span>
-              <span>Asia Pacific College, Makati</span>
+      {/* ── Hero ── */}
+      <section className="relative overflow-hidden bg-[#081214]">
+        <div className="pointer-events-none absolute inset-0">
+          <div className="absolute -top-20 right-[-5%] h-64 w-64 rounded-full bg-[#00878F]/6 blur-3xl" />
+          <div className="absolute bottom-0 left-[-5%] h-48 w-48 rounded-full bg-[#E47128]/5 blur-3xl" />
+        </div>
+        <div className="relative mx-auto max-w-7xl px-4 py-10 lg:px-6 lg:py-14">
+          <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <div className="mb-3 flex items-center gap-2">
+                <span className="flex items-center gap-1.5 rounded-full bg-[#E47128]/10 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-widest text-[#E47128]">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#E47128]" />
+                  March 21, 2026
+                </span>
+                <span className="rounded-full bg-white/5 px-3 py-1 text-[0.65rem] uppercase tracking-widest text-white/40">
+                  Asia Pacific College
+                </span>
+              </div>
+              <h1 className="font-display text-4xl leading-none sm:text-5xl lg:text-6xl">
+                <span className="text-[#00878F]">Arduino </span>
+                <span className="text-[#E47128]">Day </span>
+                <span className="text-[#21935B]">Philippines</span>
+              </h1>
+              <p className="mt-3 max-w-lg text-sm leading-relaxed text-white/45">
+                Official merch for builders, creators, and tinkerers. Grab limited-edition sets and individual items.
+              </p>
             </div>
+            <a
+              href="#products"
+              className="flex-shrink-0 rounded-full bg-[#00878F] px-6 py-2.5 text-xs font-bold uppercase tracking-widest text-white transition hover:bg-[#007078]"
+            >
+              Shop Now
+            </a>
           </div>
         </div>
+        <div className="h-px w-full bg-gradient-to-r from-transparent via-white/5 to-transparent" />
       </section>
 
       {/* ── Product Grid ── */}
       <main className="mx-auto max-w-7xl px-4 py-8 lg:px-6 lg:py-10">
-        {/* Results bar */}
-        <div id="products" className="mb-6 scroll-mt-28">
-          <h2 className="text-base font-semibold text-white">Available Merch</h2>
-          {!merchLoading && !merchError && (
-            <p className="mt-0.5 text-xs text-white/40">
-              {merchItems.length} {merchItems.length === 1 ? "item" : "items"}
-            </p>
-          )}
+        {/* Filter & Sort bar */}
+        <div id="products" className="mb-6 flex flex-col gap-4 scroll-mt-28 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2">
+            {(["all", "sets", "individual"] as const).map((f) => {
+              const labels = { all: "All", sets: "Sets & Bundles", individual: "Individual" };
+              const isActive = activeFilter === f;
+              return (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => setActiveFilter(f)}
+                  className={`rounded-full px-4 py-1.5 text-xs font-semibold uppercase tracking-wider transition ${
+                    isActive
+                      ? "bg-[#00878F] text-white"
+                      : "bg-white/5 text-white/40 hover:bg-white/8 hover:text-white/70"
+                  }`}
+                >
+                  {labels[f]}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex items-center gap-3">
+            {!merchLoading && !merchError && (
+              <span className="text-xs text-white/30">
+                {filteredItems.length} {filteredItems.length === 1 ? "item" : "items"}
+              </span>
+            )}
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+              className="rounded-full border border-white/8 bg-white/5 px-3 py-1.5 text-xs text-white/60 focus:border-[#00878F]/40 focus:outline-none"
+            >
+              <option value="default" className="bg-[#0d1a1f]">Default</option>
+              <option value="price-asc" className="bg-[#0d1a1f]">Price: Low to High</option>
+              <option value="price-desc" className="bg-[#0d1a1f]">Price: High to Low</option>
+            </select>
+          </div>
         </div>
 
         {merchLoading ? (
@@ -530,15 +608,17 @@ export default function Home() {
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {merchItems.map((item, index) => {
+            {filteredItems.map((item, renderIndex) => {
+              const index = item.originalIndex;
               const qty = quantities[index] ?? 0;
               const size = selectedSizes[index];
               const canAdd = qty > 0 && size !== null;
+              const isBundle = item.tag !== "Individual Item";
 
               return (
                 <article
                   key={item.id}
-                  className="group flex flex-col overflow-hidden rounded-xl border border-white/6 bg-[#0d1a1f] transition hover:border-white/12"
+                  className="group flex flex-col overflow-hidden rounded-xl border border-white/6 bg-[#0d1a1f] transition hover:border-white/15"
                 >
                   {/* Product image */}
                   <button
@@ -553,23 +633,11 @@ export default function Home() {
                       fill
                       className="object-cover transition duration-300 group-hover:scale-105"
                       sizes="(min-width: 1280px) 25vw, (min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
-                      priority={index === 0}
+                      priority={renderIndex === 0}
                     />
-                    {item.tag && (
-                      <span
-                        className="absolute left-2.5 top-2.5 rounded-full px-2.5 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wider text-white"
-                        style={{
-                          backgroundColor:
-                            item.tone === "teal"
-                              ? "#00878F"
-                              : item.tone === "orange"
-                                ? "#E47128"
-                                : item.tone === "green"
-                                  ? "#21935B"
-                                  : "#00878F",
-                        }}
-                      >
-                        {item.tag}
+                    {isBundle && (
+                      <span className="absolute left-2.5 top-2.5 rounded-full bg-[#00878F] px-2.5 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wider text-white">
+                        Set
                       </span>
                     )}
                   </button>
@@ -579,7 +647,10 @@ export default function Home() {
                     {/* Name + Price */}
                     <div>
                       <h3 className="text-sm font-semibold leading-snug text-white">{item.name}</h3>
-                      <p className="mt-1 text-lg font-bold text-[#00878F]">
+                      {isBundle && (
+                        <p className="mt-1 text-[0.65rem] leading-relaxed text-white/35">{item.tag}</p>
+                      )}
+                      <p className="mt-1.5 text-lg font-bold text-[#00878F]">
                         {"PHP "}
                         {(item.price ?? 0).toLocaleString()}
                       </p>
@@ -660,6 +731,20 @@ export default function Home() {
               );
             })}
           </div>
+
+          {/* Empty filter state */}
+          {filteredItems.length === 0 && !merchLoading && !merchError && merchItems.length > 0 && (
+            <div className="rounded-xl border border-white/8 bg-white/3 px-6 py-10 text-center">
+              <p className="text-sm text-white/50">No items match this filter.</p>
+              <button
+                type="button"
+                onClick={() => { setActiveFilter("all"); setSortBy("default"); }}
+                className="mt-3 text-xs font-semibold text-[#00878F] transition hover:underline"
+              >
+                Clear filters
+              </button>
+            </div>
+          )}
         )}
 
         {/* ── Order summary bar (like Amazon's "Proceed to checkout" strip) ── */}
