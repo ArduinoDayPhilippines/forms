@@ -18,6 +18,7 @@ type MerchItem = {
 type CartItem = {
   itemId: string;
   name: string;
+  image?: string;
   price: number;
   size: string;
   quantity: number;
@@ -51,6 +52,7 @@ export default function Home() {
               item &&
               typeof item.itemId === "string" &&
               typeof item.name === "string" &&
+              (!item.image || typeof item.image === "string") &&
               typeof item.price === "number" &&
               typeof item.size === "string" &&
               typeof item.quantity === "number" &&
@@ -66,6 +68,7 @@ export default function Home() {
   const [sizeGuideOpen, setSizeGuideOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [confirmationOpen, setConfirmationOpen] = useState(false);
+  const [cartToast, setCartToast] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
@@ -141,6 +144,18 @@ export default function Home() {
   }, [cartItems]);
 
   useEffect(() => {
+    if (!cartToast) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setCartToast(null);
+    }, 2200);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [cartToast]);
+
+  useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") {
         return;
@@ -178,16 +193,46 @@ export default function Home() {
 
   const adjustQuantity = (index: number, delta: number) => {
     setQuantities((prev) =>
-      prev.map((qty, i) =>
-        i === index ? Math.max(0, qty + delta) : qty
-      )
+      prev.map((qty, i) => {
+        if (i !== index) {
+          return qty;
+        }
+        const nextQty = Math.max(0, qty + delta);
+        if (nextQty > 0 && selectedSizes[index] === null) {
+          const item = merchItems[index];
+          if (item?.sizes?.length) {
+            setSelectedSizes((sizes) =>
+              sizes.map((current, sIndex) =>
+                sIndex === index ? item.sizes[0] : current
+              )
+            );
+          }
+        }
+        return nextQty;
+      })
     );
   };
 
   const updateQuantity = (index: number, value: number) => {
     const normalized = Number.isNaN(value) ? 0 : value;
     setQuantities((prev) =>
-      prev.map((qty, i) => (i === index ? Math.max(0, normalized) : qty))
+      prev.map((qty, i) => {
+        if (i !== index) {
+          return qty;
+        }
+        const nextQty = Math.max(0, normalized);
+        if (nextQty > 0 && selectedSizes[index] === null) {
+          const item = merchItems[index];
+          if (item?.sizes?.length) {
+            setSelectedSizes((sizes) =>
+              sizes.map((current, sIndex) =>
+                sIndex === index ? item.sizes[0] : current
+              )
+            );
+          }
+        }
+        return nextQty;
+      })
     );
   };
 
@@ -218,6 +263,7 @@ export default function Home() {
           {
             itemId: merchItem.id,
             name: merchItem.name,
+            image: merchItem.image,
             price: merchItem.price ?? 0,
             size,
             quantity,
@@ -232,6 +278,7 @@ export default function Home() {
     });
 
     setQuantities((prev) => prev.map((qty, i) => (i === index ? 0 : qty)));
+    setCartToast(`${merchItem.name} added to cart`);
   };
 
   const removeFromCart = (index: number) => {
@@ -624,7 +671,7 @@ export default function Home() {
           </div>
         </aside>
         <aside
-          className={`fixed right-0 top-0 z-30 h-full w-full max-w-md transform border-l border-white/10 bg-[#050b0e] p-6 transition duration-300 ${
+          className={`checkout-scroll fixed right-0 top-0 z-30 h-full w-full max-w-md transform overflow-y-auto border-l border-white/10 bg-[#050b0e] p-6 transition duration-300 ${
             cartOpen ? "translate-x-0" : "translate-x-full"
           }`}
         >
@@ -650,13 +697,26 @@ export default function Home() {
                   key={`${item.name}-${item.size}-${index}`}
                   className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3"
                 >
-                  <div>
-                    <p className="text-sm font-semibold text-white">
-                      {item.name}
-                    </p>
-                    <p className="text-xs text-white/60">
-                      Size {item.size} · Qty {item.quantity}
-                    </p>
+                  <div className="flex items-center gap-3">
+                    {item.image ? (
+                      <div className="relative h-12 w-12 overflow-hidden rounded-xl border border-white/10">
+                        <Image
+                          src={item.image}
+                          alt={item.name}
+                          fill
+                          className="object-cover"
+                          sizes="48px"
+                        />
+                      </div>
+                    ) : null}
+                    <div>
+                      <p className="text-sm font-semibold text-white">
+                        {item.name}
+                      </p>
+                      <p className="text-xs text-white/60">
+                        Size {item.size} · Qty {item.quantity}
+                      </p>
+                    </div>
                   </div>
                   <button
                     type="button"
@@ -915,6 +975,26 @@ export default function Home() {
             Close
           </button>
         </aside>
+
+        {cartToast ? (
+          <div className="cart-toast pointer-events-none fixed bottom-6 left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-full border border-emerald-300/40 bg-emerald-300/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-100 shadow-[0_20px_60px_rgba(0,0,0,0.35)] md:right-6 md:left-auto md:translate-x-0">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              aria-hidden="true"
+              className="h-4 w-4 text-emerald-300"
+            >
+              <path
+                d="M5 12.5l4.5 4.5L19 7.5"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            <span>{cartToast}</span>
+          </div>
+        ) : null}
 
         <footer className="mt-8 border-t border-white/10 pt-6 text-center text-xs uppercase tracking-[0.2em] text-white/60">
           Arduino Day Philippines 2026 · Merch Orders

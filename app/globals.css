@@ -70,6 +70,11 @@ input[type="number"] {
   animation-delay: 360ms;
 }
 
+.cart-toast {
+  animation: cartToastIn 220ms ease-out both, cartToastOut 220ms ease-in both;
+  animation-delay: 0ms, 1900ms;
+}
+
 .checkout-scroll {
   scrollbar-width: thin;
   scrollbar-color: rgba(10, 122, 122, 0.8) rgba(255, 255, 255, 0.08);
@@ -110,5 +115,27 @@ input[type="number"] {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes cartToastIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 14px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@keyframes cartToastOut {
+  from {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, 10px);
   }
 }
