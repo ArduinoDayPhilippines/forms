@@ -75,6 +75,10 @@ export default function Home() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
+  const [checkoutStep, setCheckoutStep] = useState(0);
+  const [privacyConsent, setPrivacyConsent] = useState(false);
+  const [fulfillment, setFulfillment] = useState<"pickup" | "delivery">("pickup");
+  const [region, setRegion] = useState<"ncr" | "luzon" | "visayas" | "mindanao">("ncr");
 
   useEffect(() => {
     let isActive = true;
@@ -310,28 +314,34 @@ export default function Home() {
     const fullName = String(formData.get("fullName") ?? "").trim();
     const email = String(formData.get("email") ?? "").trim();
     const phone = String(formData.get("contactNumber") ?? "").trim();
-    const address = String(formData.get("address") ?? "").trim();
-    const paymentMethod = String(formData.get("paymentMethod") ?? "gcash");
-    const fulfillmentMethod = String(
-      formData.get("fulfillmentMethod") ?? "pickup"
-    );
+    const fulfillmentMethod = fulfillment;
+
+    let address = "Pickup at venue";
+    if (fulfillmentMethod === "delivery") {
+      const houseNo = String(formData.get("houseNo") ?? "").trim();
+      const street = String(formData.get("street") ?? "").trim();
+      const barangay = String(formData.get("barangay") ?? "").trim();
+      const district = String(formData.get("district") ?? "").trim();
+      const city = String(formData.get("city") ?? "").trim();
+      const zipcode = String(formData.get("zipcode") ?? "").trim();
+      const regionLabel = region.toUpperCase();
+      if (!houseNo || !street || !barangay || !city || !zipcode) {
+        setSubmitError("Please complete all address fields.");
+        return;
+      }
+      address = [houseNo, street, barangay, district, city, regionLabel, zipcode]
+        .filter(Boolean)
+        .join(", ");
+    }
+
+    const paymentMethod = "gcash";
     const gcashReference = String(
       formData.get("gcashReference") ?? ""
     ).trim();
     const receiptFile = formData.get("gcashReceipt");
 
-    if (!fullName || !email || !phone || !address) {
+    if (!fullName || !email || !phone) {
       setSubmitError("Please complete all contact fields.");
-      return;
-    }
-
-    if (paymentMethod !== "gcash") {
-      setSubmitError("Select GCash as your payment method.");
-      return;
-    }
-
-    if (fulfillmentMethod !== "pickup" && fulfillmentMethod !== "delivery") {
-      setSubmitError("Select pickup or delivery for your order.");
       return;
     }
 
@@ -415,6 +425,10 @@ export default function Home() {
     form.reset();
     setSubmitSuccess("Order received! We'll verify your GCash receipt.");
     setCheckoutOpen(false);
+    setCheckoutStep(0);
+    setPrivacyConsent(false);
+    setFulfillment("pickup");
+    setRegion("ncr");
     setConfirmationOpen(true);
     setSubmitting(false);
   };
@@ -716,48 +730,51 @@ export default function Home() {
         role="dialog"
         aria-modal="true"
         aria-hidden={!sizeGuideOpen}
-        className={`fixed left-1/2 top-1/2 z-40 max-h-[85vh] w-[92%] max-w-4xl -translate-x-1/2 -translate-y-1/2 transform overflow-y-auto rounded-2xl border border-white/8 bg-[#0d1a1f] p-6 transition duration-300 ${
+        className={`fixed left-1/2 top-1/2 z-40 max-h-[92vh] w-[96%] max-w-6xl -translate-x-1/2 -translate-y-1/2 transform overflow-y-auto rounded-2xl border border-white/8 bg-[#0d1a1f] p-6 sm:p-8 transition duration-300 ${
           sizeGuideOpen
             ? "scale-100 opacity-100"
             : "pointer-events-none scale-95 opacity-0"
         }`}
       >
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-white">Sizing Guide</h3>
+          <h3 className="text-xl font-bold text-white">Sizing Guide</h3>
           <button
             type="button"
             onClick={() => setSizeGuideOpen(false)}
-            className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-white/60 transition hover:border-white/20 hover:text-white"
+            className="rounded-lg border border-white/10 px-4 py-2 text-sm text-white/60 transition hover:border-white/20 hover:text-white"
           >
             Close
           </button>
         </div>
-        <div className="mt-5 grid gap-4 md:grid-cols-2">
-          <div className="overflow-hidden rounded-xl border border-white/8 bg-white/3 p-4">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-white/50">
+        <p className="mt-2 text-sm text-white/40">
+          Refer to the charts below for accurate sizing. All measurements are in centimeters.
+        </p>
+        <div className="mt-6 grid gap-6 md:grid-cols-2">
+          <div className="overflow-hidden rounded-xl border border-white/8 bg-white/3 p-5">
+            <h4 className="text-sm font-semibold uppercase tracking-wider text-[#00878F]">
               Shirt Sizing
             </h4>
-            <div className="relative mt-3 aspect-[4/3] w-full">
+            <div className="relative mt-4 aspect-[4/3] w-full">
               <Image
                 src="/shirt_size.png"
                 alt="Shirt sizing guide"
                 fill
                 className="object-contain"
-                sizes="(min-width: 768px) 50vw, 100vw"
+                sizes="(min-width: 768px) 45vw, 90vw"
               />
             </div>
           </div>
-          <div className="overflow-hidden rounded-xl border border-white/8 bg-white/3 p-4">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-white/50">
+          <div className="overflow-hidden rounded-xl border border-white/8 bg-white/3 p-5">
+            <h4 className="text-sm font-semibold uppercase tracking-wider text-[#00878F]">
               Vest Sizing
             </h4>
-            <div className="relative mt-3 aspect-[4/3] w-full">
+            <div className="relative mt-4 aspect-[4/3] w-full">
               <Image
                 src="/vest_size.png"
                 alt="Vest sizing guide"
                 fill
                 className="object-contain"
-                sizes="(min-width: 768px) 50vw, 100vw"
+                sizes="(min-width: 768px) 45vw, 90vw"
               />
             </div>
           </div>
@@ -864,190 +881,395 @@ export default function Home() {
         </div>
       </aside>
 
-      {/* ── Checkout Modal ── */}
+      {/* ── Checkout Modal (3-step wizard) ── */}
       <aside
         role="dialog"
         aria-modal="true"
         aria-hidden={!checkoutOpen}
-        className={`checkout-scroll fixed left-1/2 top-1/2 z-40 max-h-[90vh] w-[94%] max-w-3xl -translate-x-1/2 -translate-y-1/2 transform overflow-y-auto rounded-2xl border border-white/8 bg-[#0d1a1f] transition duration-300 ${
+        className={`checkout-scroll fixed left-1/2 top-1/2 z-40 max-h-[90vh] w-[94%] max-w-2xl -translate-x-1/2 -translate-y-1/2 transform overflow-y-auto rounded-2xl border border-white/8 bg-[#0d1a1f] transition duration-300 ${
           checkoutOpen
             ? "scale-100 opacity-100"
             : "pointer-events-none scale-95 opacity-0"
         }`}
       >
         {/* Checkout header */}
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/8 bg-[#0d1a1f] px-6 py-4">
-          <h3 className="text-lg font-semibold text-white">Checkout</h3>
-          <button
-            type="button"
-            onClick={() => setCheckoutOpen(false)}
-            className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-white/60 transition hover:border-white/20 hover:text-white"
-          >
-            Close
-          </button>
-        </div>
-
-        <div className="grid gap-6 p-6 lg:grid-cols-[1fr_0.8fr]">
-          {/* Order form */}
-          <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
-            <h4 className="text-sm font-semibold uppercase tracking-wider text-white/60">Contact Information</h4>
-
-            <label className="text-xs text-white/50">
-              Full Name
-              <input
-                type="text"
-                name="fullName"
-                placeholder="Juan Dela Cruz"
-                required
-                className="mt-1.5 w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-white/30 focus:border-[#00878F]/50 focus:outline-none focus:ring-1 focus:ring-[#00878F]/30"
-              />
-            </label>
-
-            <label className="text-xs text-white/50">
-              Email
-              <input
-                type="email"
-                name="email"
-                placeholder="you@email.com"
-                required
-                className="mt-1.5 w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-white/30 focus:border-[#00878F]/50 focus:outline-none focus:ring-1 focus:ring-[#00878F]/30"
-              />
-            </label>
-
-            <label className="text-xs text-white/50">
-              Contact Number
-              <input
-                type="tel"
-                name="contactNumber"
-                placeholder="0917 000 0000"
-                required
-                className="mt-1.5 w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-white/30 focus:border-[#00878F]/50 focus:outline-none focus:ring-1 focus:ring-[#00878F]/30"
-              />
-            </label>
-
-            <label className="text-xs text-white/50">
-              Address
-              <input
-                type="text"
-                name="address"
-                placeholder="House No., Street, City"
-                required
-                className="mt-1.5 w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-white/30 focus:border-[#00878F]/50 focus:outline-none focus:ring-1 focus:ring-[#00878F]/30"
-              />
-            </label>
-
-            <div className="rounded-xl border border-white/8 bg-white/3 p-4">
-              <p className="text-xs font-semibold uppercase tracking-wider text-white/50">
-                Fulfillment
-              </p>
-              <label className="mt-2.5 flex items-center gap-2.5 text-sm text-white/70">
-                <input
-                  type="radio"
-                  name="fulfillmentMethod"
-                  value="pickup"
-                  defaultChecked
-                  className="h-4 w-4 border-white/20 bg-white/5 text-[#00878F] focus:ring-[#00878F]/30"
-                />
-                Pickup at venue
-              </label>
-              <label className="mt-2 flex items-center gap-2.5 text-sm text-white/70">
-                <input
-                  type="radio"
-                  name="fulfillmentMethod"
-                  value="delivery"
-                  className="h-4 w-4 border-white/20 bg-white/5 text-[#00878F] focus:ring-[#00878F]/30"
-                />
-                Delivery
-              </label>
-            </div>
-
-            <div className="rounded-xl border border-white/8 bg-white/3 p-4">
-              <p className="text-xs font-semibold uppercase tracking-wider text-white/50">
-                Payment
-              </p>
-              <label className="mt-2.5 flex items-center gap-2.5 text-sm text-white/70">
-                <input
-                  type="radio"
-                  name="paymentMethod"
-                  value="gcash"
-                  defaultChecked
-                  className="h-4 w-4 border-white/20 bg-white/5 text-[#00878F] focus:ring-[#00878F]/30"
-                />
-                GCash
-              </label>
-              <p className="mt-1.5 text-xs text-white/40">
-                Upload your receipt to confirm the order.
-              </p>
-            </div>
-
-            <label className="text-xs text-white/50">
-              GCash Reference No.
-              <input
-                type="text"
-                name="gcashReference"
-                placeholder="0000000000"
-                required
-                className="mt-1.5 w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-white/30 focus:border-[#00878F]/50 focus:outline-none focus:ring-1 focus:ring-[#00878F]/30"
-              />
-            </label>
-
-            <label className="text-xs text-white/50">
-              GCash Receipt Screenshot
-              <input
-                type="file"
-                name="gcashReceipt"
-                accept="image/*"
-                required
-                className="mt-1.5 w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white file:mr-3 file:rounded-md file:border-0 file:bg-white/10 file:px-3 file:py-1.5 file:text-xs file:text-white/70"
-              />
-            </label>
-
-            {submitError ? (
-              <p className="rounded-lg bg-[#E47128]/10 px-3 py-2 text-xs text-[#E47128]">
-                {submitError}
-              </p>
-            ) : null}
-            {submitSuccess ? (
-              <p className="rounded-lg bg-[#21935B]/10 px-3 py-2 text-xs text-[#21935B]">
-                {submitSuccess}
-              </p>
-            ) : null}
-
+        <div className="sticky top-0 z-10 border-b border-white/8 bg-[#0d1a1f] px-6 py-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-white">Checkout</h3>
             <button
-              type="submit"
-              disabled={submitting}
-              className="rounded-lg bg-[#E47128] py-3 text-sm font-bold uppercase tracking-wider text-white transition hover:bg-[#d0641f] disabled:cursor-not-allowed disabled:opacity-50"
+              type="button"
+              onClick={() => { setCheckoutOpen(false); setCheckoutStep(0); }}
+              className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-white/60 transition hover:border-white/20 hover:text-white"
             >
-              {submitting ? "Submitting..." : "Place Order"}
+              Close
             </button>
-          </form>
+          </div>
 
-          {/* Order summary sidebar */}
-          <div className="rounded-xl border border-white/8 bg-white/3 p-4 lg:sticky lg:top-4 lg:self-start">
-            <h4 className="text-sm font-semibold uppercase tracking-wider text-white/60">Order Summary</h4>
-            <div className="mt-3 flex flex-col gap-2">
-              {cartItems.map((item, index) => (
-                <div key={`summary-${item.name}-${item.size}-${index}`} className="flex items-center justify-between text-sm">
-                  <div className="flex-1">
-                    <p className="text-white/80">{item.name}</p>
-                    <p className="text-xs text-white/40">{item.size} x {item.quantity}</p>
-                  </div>
-                  <span className="text-white/70">PHP {(item.price * item.quantity).toLocaleString()}</span>
-                </div>
-              ))}
-            </div>
-            <div className="mt-4 border-t border-white/8 pt-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-white/60">Total</span>
-                <span className="text-lg font-bold text-[#00878F]">PHP {cartSubtotal.toLocaleString()}</span>
-              </div>
-            </div>
-            <div className="mt-4 flex items-center gap-2 rounded-lg bg-[#E47128]/8 px-3 py-2 text-xs text-[#E47128]">
-              <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[#E47128]" />
-              Limited quantities -- order while supplies last
-            </div>
+          {/* Step dots */}
+          <div className="mt-4 flex items-center justify-center gap-3">
+            {["Data Privacy", "Personal Info", "Fulfillment & Payment"].map((label, i) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => {
+                  if (i === 0) setCheckoutStep(0);
+                  if (i === 1 && privacyConsent) setCheckoutStep(1);
+                  if (i === 2 && privacyConsent) setCheckoutStep(2);
+                }}
+                className="flex items-center gap-2"
+              >
+                <span
+                  className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold transition ${
+                    checkoutStep === i
+                      ? "bg-[#00878F] text-white"
+                      : checkoutStep > i
+                        ? "bg-[#21935B] text-white"
+                        : "bg-white/10 text-white/40"
+                  }`}
+                >
+                  {checkoutStep > i ? (
+                    <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5" aria-hidden="true">
+                      <path d="M5 12.5l4.5 4.5L19 7.5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  ) : (
+                    i + 1
+                  )}
+                </span>
+                <span className={`hidden text-xs sm:inline ${
+                  checkoutStep === i ? "text-white" : "text-white/40"
+                }`}>
+                  {label}
+                </span>
+                {i < 2 && <span className="hidden h-px w-6 bg-white/10 sm:block" />}
+              </button>
+            ))}
           </div>
         </div>
+
+        <form className="p-6" onSubmit={handleSubmit}>
+          {/* ── Step 1: Data Privacy ── */}
+          {checkoutStep === 0 && (
+            <div className="flex flex-col gap-5">
+              <div className="rounded-xl border border-white/8 bg-white/3 p-5">
+                <h4 className="text-sm font-semibold text-white">Data Privacy Consent</h4>
+                <p className="mt-3 text-xs leading-relaxed text-white/50">
+                  By proceeding with this order, you agree to the collection and processing of your personal data
+                  (full name, email address, and contact number) solely for the purpose of fulfilling your Arduino Day Philippines 2026 merch order.
+                  Your information will not be shared with third parties and will be stored securely.
+                  You may request deletion of your data by contacting the organizers.
+                </p>
+                <p className="mt-3 text-xs leading-relaxed text-white/50">
+                  In compliance with the{" "}
+                  <span className="text-white/70">Republic Act No. 10173</span>{" "}
+                  (Data Privacy Act of 2012), we ensure that your personal information is handled with strict confidentiality.
+                </p>
+              </div>
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={privacyConsent}
+                  onChange={(e) => setPrivacyConsent(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-white/20 bg-white/5 text-[#00878F] focus:ring-[#00878F]/30"
+                />
+                <span className="text-sm text-white/70">
+                  I have read and agree to the data privacy terms above.
+                </span>
+              </label>
+              <button
+                type="button"
+                disabled={!privacyConsent}
+                onClick={() => setCheckoutStep(1)}
+                className="w-full rounded-lg bg-[#00878F] py-3 text-sm font-bold text-white transition hover:bg-[#007078] disabled:cursor-not-allowed disabled:opacity-30"
+              >
+                Continue
+              </button>
+            </div>
+          )}
+
+          {/* ── Step 2: Personal Info ── */}
+          {checkoutStep === 1 && (
+            <div className="flex flex-col gap-4">
+              <h4 className="text-sm font-semibold uppercase tracking-wider text-white/60">Personal Information</h4>
+
+              <label className="flex flex-col gap-1.5 text-xs text-white/50">
+                Full Name
+                <input
+                  type="text"
+                  name="fullName"
+                  placeholder="Juan Dela Cruz"
+                  required
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-white/30 focus:border-[#00878F]/50 focus:outline-none focus:ring-1 focus:ring-[#00878F]/30"
+                />
+                <span className="text-[0.65rem] text-white/30">First name, middle initial, last name</span>
+              </label>
+
+              <label className="flex flex-col gap-1.5 text-xs text-white/50">
+                Email Address
+                <input
+                  type="email"
+                  name="email"
+                  placeholder="you@email.com"
+                  required
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-white/30 focus:border-[#00878F]/50 focus:outline-none focus:ring-1 focus:ring-[#00878F]/30"
+                />
+                <span className="text-[0.65rem] text-white/30">We will send order updates to this email</span>
+              </label>
+
+              <label className="flex flex-col gap-1.5 text-xs text-white/50">
+                Contact Number
+                <input
+                  type="tel"
+                  name="contactNumber"
+                  placeholder="09XX XXX XXXX"
+                  pattern="[0-9\s\-\+]{10,15}"
+                  required
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-white/30 focus:border-[#00878F]/50 focus:outline-none focus:ring-1 focus:ring-[#00878F]/30"
+                />
+                <span className="text-[0.65rem] text-white/30">Format: 09XX XXX XXXX (Philippine mobile number)</span>
+              </label>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setCheckoutStep(0)}
+                  className="rounded-lg border border-white/10 px-5 py-2.5 text-sm text-white/60 transition hover:border-white/20 hover:text-white"
+                >
+                  Back
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCheckoutStep(2)}
+                  className="flex-1 rounded-lg bg-[#00878F] py-2.5 text-sm font-bold text-white transition hover:bg-[#007078]"
+                >
+                  Continue
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── Step 3: Fulfillment & Payment ── */}
+          {checkoutStep === 2 && (
+            <div className="flex flex-col gap-5">
+              {/* Fulfillment */}
+              <div>
+                <h4 className="text-sm font-semibold uppercase tracking-wider text-white/60">Fulfillment</h4>
+                <div className="mt-3 flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setFulfillment("pickup")}
+                    className={`flex-1 rounded-lg border py-3 text-sm font-semibold transition ${
+                      fulfillment === "pickup"
+                        ? "border-[#00878F] bg-[#00878F]/10 text-[#00878F]"
+                        : "border-white/10 text-white/50 hover:border-white/20"
+                    }`}
+                  >
+                    Pickup at Venue
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFulfillment("delivery")}
+                    className={`flex-1 rounded-lg border py-3 text-sm font-semibold transition ${
+                      fulfillment === "delivery"
+                        ? "border-[#00878F] bg-[#00878F]/10 text-[#00878F]"
+                        : "border-white/10 text-white/50 hover:border-white/20"
+                    }`}
+                  >
+                    Delivery
+                  </button>
+                </div>
+                <input type="hidden" name="fulfillmentMethod" value={fulfillment} />
+              </div>
+
+              {/* Delivery address fields */}
+              {fulfillment === "delivery" && (
+                <div className="flex flex-col gap-3 rounded-xl border border-white/8 bg-white/3 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-white/50">Delivery Address</p>
+
+                  {/* Region toggle */}
+                  <div>
+                    <p className="mb-2 text-xs text-white/40">Region</p>
+                    <div className="grid grid-cols-4 gap-1.5 rounded-lg border border-white/8 bg-white/3 p-1">
+                      {(["ncr", "luzon", "visayas", "mindanao"] as const).map((r) => (
+                        <button
+                          key={r}
+                          type="button"
+                          onClick={() => setRegion(r)}
+                          className={`rounded-md py-1.5 text-xs font-semibold uppercase transition ${
+                            region === r
+                              ? "bg-[#00878F] text-white"
+                              : "text-white/40 hover:text-white/70"
+                          }`}
+                        >
+                          {r === "ncr" ? "NCR" : r.charAt(0).toUpperCase() + r.slice(1)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="flex flex-col gap-1 text-xs text-white/50">
+                      House / Unit No.
+                      <input
+                        type="text"
+                        name="houseNo"
+                        placeholder="123"
+                        required
+                        className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder-white/30 focus:border-[#00878F]/50 focus:outline-none focus:ring-1 focus:ring-[#00878F]/30"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1 text-xs text-white/50">
+                      Street
+                      <input
+                        type="text"
+                        name="street"
+                        placeholder="Rizal St."
+                        required
+                        className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder-white/30 focus:border-[#00878F]/50 focus:outline-none focus:ring-1 focus:ring-[#00878F]/30"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="flex flex-col gap-1 text-xs text-white/50">
+                      Barangay
+                      <input
+                        type="text"
+                        name="barangay"
+                        placeholder="Brgy. San Antonio"
+                        required
+                        className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder-white/30 focus:border-[#00878F]/50 focus:outline-none focus:ring-1 focus:ring-[#00878F]/30"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1 text-xs text-white/50">
+                      District
+                      <input
+                        type="text"
+                        name="district"
+                        placeholder="District 1 (optional)"
+                        className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder-white/30 focus:border-[#00878F]/50 focus:outline-none focus:ring-1 focus:ring-[#00878F]/30"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="flex flex-col gap-1 text-xs text-white/50">
+                      City / Municipality
+                      <input
+                        type="text"
+                        name="city"
+                        placeholder="Makati City"
+                        required
+                        className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder-white/30 focus:border-[#00878F]/50 focus:outline-none focus:ring-1 focus:ring-[#00878F]/30"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1 text-xs text-white/50">
+                      Zip Code
+                      <input
+                        type="text"
+                        name="zipcode"
+                        placeholder="1200"
+                        pattern="[0-9]{4}"
+                        required
+                        className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder-white/30 focus:border-[#00878F]/50 focus:outline-none focus:ring-1 focus:ring-[#00878F]/30"
+                      />
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              {fulfillment === "pickup" && (
+                <div className="rounded-xl border border-white/8 bg-white/3 p-4">
+                  <p className="text-sm text-white/60">
+                    Pick up your order at <span className="text-white">Asia Pacific College, Makati</span> on March 21, 2026.
+                  </p>
+                </div>
+              )}
+
+              {/* Payment */}
+              <div className="rounded-xl border border-white/8 bg-white/3 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wider text-white/50">
+                  Payment via GCash
+                </p>
+                <p className="mt-1.5 text-xs text-white/40">
+                  Send payment then upload your receipt to confirm the order.
+                </p>
+
+                <label className="mt-3 flex flex-col gap-1 text-xs text-white/50">
+                  GCash Reference No.
+                  <input
+                    type="text"
+                    name="gcashReference"
+                    placeholder="0000000000"
+                    required
+                    className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder-white/30 focus:border-[#00878F]/50 focus:outline-none focus:ring-1 focus:ring-[#00878F]/30"
+                  />
+                  <span className="text-[0.65rem] text-white/30">13-digit reference number from GCash</span>
+                </label>
+
+                <label className="mt-3 flex flex-col gap-1 text-xs text-white/50">
+                  GCash Receipt Screenshot
+                  <input
+                    type="file"
+                    name="gcashReceipt"
+                    accept="image/*"
+                    required
+                    className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white file:mr-3 file:rounded-md file:border-0 file:bg-white/10 file:px-3 file:py-1.5 file:text-xs file:text-white/70"
+                  />
+                </label>
+              </div>
+
+              {/* Order Summary */}
+              <div className="rounded-xl border border-white/8 bg-white/3 p-4">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-white/50">Order Summary</h4>
+                <div className="mt-3 flex flex-col gap-2">
+                  {cartItems.map((item, cIndex) => (
+                    <div key={`summary-${item.name}-${item.size}-${cIndex}`} className="flex items-center justify-between text-sm">
+                      <div className="flex-1">
+                        <p className="text-white/80">{item.name}</p>
+                        <p className="text-xs text-white/40">{item.size} x {item.quantity}</p>
+                      </div>
+                      <span className="text-white/70">PHP {(item.price * item.quantity).toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 border-t border-white/8 pt-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-white/60">Total</span>
+                    <span className="text-lg font-bold text-[#00878F]">PHP {cartSubtotal.toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+
+              {submitError ? (
+                <p className="rounded-lg bg-[#E47128]/10 px-3 py-2 text-xs text-[#E47128]">
+                  {submitError}
+                </p>
+              ) : null}
+              {submitSuccess ? (
+                <p className="rounded-lg bg-[#21935B]/10 px-3 py-2 text-xs text-[#21935B]">
+                  {submitSuccess}
+                </p>
+              ) : null}
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setCheckoutStep(1)}
+                  className="rounded-lg border border-white/10 px-5 py-3 text-sm text-white/60 transition hover:border-white/20 hover:text-white"
+                >
+                  Back
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="flex-1 rounded-lg bg-[#E47128] py-3 text-sm font-bold uppercase tracking-wider text-white transition hover:bg-[#d0641f] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {submitting ? "Submitting..." : "Place Order"}
+                </button>
+              </div>
+            </div>
+          )}
+        </form>
       </aside>
 
       {/* ── Confirmation Modal ── */}
