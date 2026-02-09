@@ -607,6 +607,7 @@ export default function Home() {
             <p className="text-sm text-white/50">No merch is available yet. Check back soon.</p>
           </div>
         ) : (
+          <>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filteredItems.map((item, renderIndex) => {
               const index = item.originalIndex;
@@ -745,6 +746,7 @@ export default function Home() {
               </button>
             </div>
           )}
+          </>
         )}
 
         {/* ── Order summary bar (like Amazon's "Proceed to checkout" strip) ── */}
