@@ -779,7 +779,10 @@ export default function AdminPage() {
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4"
             onClick={() => setViewingReceipt(null)}
           >
-            <div className="relative max-h-[90vh] max-w-[90vw] overflow-hidden rounded-xl border border-white/10 shadow-2xl">
+            <div
+              className="relative h-[90vh] w-[90vw] max-h-[90vh] max-w-[90vw] overflow-hidden rounded-xl border border-white/10 shadow-2xl"
+              onClick={(event) => event.stopPropagation()}
+            >
               <Image
                 src={viewingReceipt}
                 alt="Receipt"
