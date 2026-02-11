@@ -95,6 +95,36 @@ export default function Home() {
     "default",
   );
 
+  // Load cart from localStorage after mount (client-side only)
+  useEffect(() => {
+    const stored = window.localStorage.getItem(CART_STORAGE_KEY);
+    if (!stored) {
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(stored) as CartItem[];
+      const validItems = Array.isArray(parsed)
+        ? parsed.filter(
+            (item) =>
+              item &&
+              typeof item.itemId === "string" &&
+              typeof item.name === "string" &&
+              (!item.image || typeof item.image === "string") &&
+              typeof item.price === "number" &&
+              typeof item.size === "string" &&
+              typeof item.quantity === "number" &&
+              item.quantity > 0,
+          )
+        : [];
+      if (validItems.length > 0) {
+        setCartItems(validItems);
+      }
+    } catch {
+      window.localStorage.removeItem(CART_STORAGE_KEY);
+    }
+  }, []);
+
   useEffect(() => {
     let isActive = true;
 
@@ -1469,7 +1499,7 @@ export default function Home() {
                   <div className="overflow-hidden rounded-xl border border-white/10 bg-white p-2">
                     <div className="relative h-48 w-48 sm:h-56 sm:w-56">
                       <Image
-                        src="/gcash-qr.jpg"
+                        src="/gcashqrc.png"
                         alt="GCash QR Code - Scan to pay"
                         fill
                         className="object-contain"
@@ -1480,6 +1510,9 @@ export default function Home() {
                 </div>
                 <p className="mt-2 text-center text-[0.65rem] text-white/30">
                   Scan with your GCash app to send payment
+                </p>
+                <p className="mt-1 text-center text-sm font-semibold text-[#00878F]">
+                  GCash Number: 0966 230 8320
                 </p>
 
                 <label className="mt-4 flex flex-col gap-1 text-xs text-white/50">
