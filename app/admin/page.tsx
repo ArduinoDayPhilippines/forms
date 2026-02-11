@@ -1,7 +1,8 @@
 "use client";
 
-import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
+import { getOrdersAction, updateOrderAction } from "./actions";
 import { supabase } from "../../lib/supabase/client";
 
 type OrderLine = {
@@ -19,8 +20,8 @@ type OrderItem = {
   phone: string;
   address: string;
   paymentMethod: string;
-  gcashReference: string;
-  gcashReceiptUrl: string;
+  gcashReference: string | null;
+  gcashReceiptUrl: string | null;
   items: OrderLine[];
   itemsSummary: string;
   itemCount: number;
@@ -38,6 +39,33 @@ type OrderItem = {
     | "cancelled";
   fulfillment: "delivery" | "pickup";
   createdAt: string;
+};
+
+type OrderLineRecord = {
+  name?: string | null;
+  size?: string | null;
+  quantity?: number | null;
+  unit_price?: number | null;
+  unitPrice?: number | null;
+  line_total?: number | null;
+  lineTotal?: number | null;
+};
+
+type OrderRecord = {
+  id: string;
+  full_name: string;
+  email: string;
+  phone: string;
+  address: string;
+  payment_method: string;
+  gcash_reference: string | null;
+  gcash_receipt_url: string | null;
+  items: OrderLineRecord[] | null;
+  delivery_fee: number | null;
+  total_amount: number | null;
+  status: OrderItem["status"];
+  fulfillment_method: OrderItem["fulfillment"];
+  created_at: string;
 };
 
 const statusStyles: Record<OrderItem["status"], string> = {
@@ -79,23 +107,18 @@ export default function AdminPage() {
     }
 
     try {
-      const response = await fetch("/api/admin/orders", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (!response.ok) {
-        const payload = await response.json().catch(() => null);
-        setOrdersError(payload?.error || "Unable to load orders.");
+      const payload = await getOrdersAction(token);
+      if (payload?.error) {
+        setOrdersError(payload.error || "Unable to load orders.");
         setOrders([]);
         return;
       }
 
-      const payload = await response.json();
       setOrders(
-        (payload.orders ?? []).map((order: any) => {
+        (payload.orders ?? []).map((order: OrderRecord) => {
           const rawItems = Array.isArray(order.items) ? order.items : [];
           const items = rawItems
-            .map((item: any) => ({
+            .map((item: OrderLineRecord) => ({
               name: String(item?.name ?? ""),
               size: String(item?.size ?? ""),
               quantity: Number(item?.quantity ?? 0),
@@ -151,7 +174,7 @@ export default function AdminPage() {
           };
         }),
       );
-    } catch (err) {
+    } catch {
       setOrdersError("A network error occurred.");
     } finally {
       setOrdersLoading(false);
@@ -224,19 +247,23 @@ export default function AdminPage() {
     const { data: sessionData } = await supabase.auth.getSession();
     const token = sessionData.session?.access_token;
 
-    const response = await fetch("/api/admin/orders", {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ id: orderId, status }),
+    if (!token) {
+      setOrdersError("Admin session expired. Please log in again.");
+      setStatusUpdatingId(null);
+      return;
+    }
+
+    const result = await updateOrderAction(token ?? "", {
+      id: orderId,
+      status,
     });
 
-    if (response.ok) {
+    if (result.ok) {
       setOrders((prev) =>
         prev.map((o) => (o.id === orderId ? { ...o, status } : o)),
       );
+    } else {
+      setOrdersError(result.error || "Unable to update order status.");
     }
     setStatusUpdatingId(null);
   };
@@ -245,29 +272,27 @@ export default function AdminPage() {
     const { data: sessionData } = await supabase.auth.getSession();
     const token = sessionData.session?.access_token;
 
-    const response = await fetch("/api/admin/orders", {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        id: updatedOrder.id,
-        email: updatedOrder.email,
-        phone: updatedOrder.phone,
-        address: updatedOrder.address,
-        items: updatedOrder.items,
-        status: updatedOrder.status, // Preserve status or allow updates if needed
-      }),
+    if (!token) {
+      alert("Admin session expired. Please log in again.");
+      return;
+    }
+
+    const result = await updateOrderAction(token ?? "", {
+      id: updatedOrder.id,
+      email: updatedOrder.email,
+      phone: updatedOrder.phone,
+      address: updatedOrder.address,
+      items: updatedOrder.items,
+      status: updatedOrder.status, // Preserve status or allow updates if needed
     });
 
-    if (response.ok) {
+    if (result.ok) {
       setOrders((prev) =>
         prev.map((o) => (o.id === updatedOrder.id ? updatedOrder : o)),
       );
       setEditingOrder(null);
     } else {
-      alert("Failed to save order");
+      alert(result.error || "Failed to save order");
     }
   };
 
@@ -439,8 +464,27 @@ export default function AdminPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
-                    {filteredOrders.map((order) => (
-                      <tr key={order.id}>
+                    {ordersLoading ? (
+                      <tr>
+                        <td
+                          colSpan={12}
+                          className="py-6 text-center text-white/60"
+                        >
+                          Loading orders...
+                        </td>
+                      </tr>
+                    ) : ordersError ? (
+                      <tr>
+                        <td
+                          colSpan={12}
+                          className="py-6 text-center text-red-300"
+                        >
+                          {ordersError}
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredOrders.map((order) => (
+                        <tr key={order.id}>
                         <td className="py-4 whitespace-nowrap pr-4">
                           <div className="font-bold">{order.name}</div>
                           <div className="text-xs text-white/40">
@@ -514,7 +558,7 @@ export default function AdminPage() {
                             onChange={(e) =>
                               handleStatusChange(
                                 order.id,
-                                e.target.value as any,
+                                e.target.value as OrderItem["status"],
                               )
                             }
                             disabled={statusUpdatingId === order.id}
@@ -541,7 +585,8 @@ export default function AdminPage() {
                           </button>
                         </td>
                       </tr>
-                    ))}
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -562,10 +607,13 @@ export default function AdminPage() {
             onClick={() => setViewingReceipt(null)}
           >
             <div className="relative max-h-[90vh] max-w-[90vw] overflow-hidden rounded-xl border border-white/10 shadow-2xl">
-              <img
+              <Image
                 src={viewingReceipt}
                 alt="Receipt"
-                className="max-h-[90vh] max-w-full object-contain"
+                fill
+                sizes="90vw"
+                className="object-contain"
+                unoptimized
               />
               <button
                 onClick={() => setViewingReceipt(null)}
@@ -601,9 +649,9 @@ function StatCard({
 }: {
   title: string;
   value: number;
-  color?: string;
+  color?: "amber" | "sky" | "white";
 }) {
-  const colors: any = {
+  const colors: Record<"amber" | "sky" | "white", string> = {
     amber: "border-[#E47128]/20 bg-[#E47128]/10 text-[#E47128]",
     sky: "border-sky-400/20 bg-sky-400/10 text-sky-200",
     white: "border-white/10 bg-white/5 text-white",
@@ -636,7 +684,11 @@ function EditOrderModal({
     setSaving(false);
   };
 
-  const updateItem = (index: number, field: keyof OrderLine, value: any) => {
+  const updateItem = (
+    index: number,
+    field: keyof OrderLine,
+    value: OrderLine[keyof OrderLine],
+  ) => {
     const newItems = [...formData.items];
     newItems[index] = { ...newItems[index], [field]: value };
 
