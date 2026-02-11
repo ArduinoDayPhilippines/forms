@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 
 import { supabase } from "../lib/supabase/client";
+import { createOrderAction } from "./actions/order";
 import Footer from "./components/Footer";
 
 type MerchItem = {
@@ -592,7 +593,7 @@ export default function Home() {
     const totalWeight = useKilograms
       ? Number((totalWeightGrams / 1000).toFixed(2))
       : totalWeightGrams;
-    const weightUnit = useKilograms ? "kg" : "g";
+    const weightUnit: "g" | "kg" = useKilograms ? "kg" : "g";
 
     const orderPayload = {
       full_name: fullName.trim(),
@@ -611,14 +612,10 @@ export default function Home() {
       status: "pending" as const,
     };
 
-    const { error } = await supabase.from("orders").insert(orderPayload);
+    const result = await createOrderAction(orderPayload);
 
-    if (error) {
-      setSubmitError(
-        error.message
-          ? `Unable to submit order: ${error.message}`
-          : "Unable to submit order. Please try again.",
-      );
+    if (!result.ok) {
+      setSubmitError(result.error || "Unable to submit order. Please try again.");
       setSubmitting(false);
       return;
     }
@@ -631,6 +628,9 @@ export default function Home() {
     setContactNumber("");
     setGcashReference("");
     setSubmitSuccess("Order received! We'll verify your GCash receipt.");
+    if (result.emailError) {
+      setSubmitError(result.emailError);
+    }
     setCheckoutOpen(false);
     setCheckoutStep(0);
     setPrivacyConsent(false);
