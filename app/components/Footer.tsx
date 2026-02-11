@@ -23,7 +23,7 @@ const Footer = () => {
 						</p>
 						<div className="flex gap-4">
 							<a
-								href="https://www.tiktok.com"
+								href="https://www.tiktok.com/@arduinodayph"
 								target="_blank"
 								rel="noopener noreferrer"
 								className="w-11 h-11 rounded-full bg-gray-300 hover:bg-[#00D9FF] transition-colors duration-300 flex items-center justify-center"
@@ -36,7 +36,7 @@ const Footer = () => {
 								</svg>
 							</a>
 							<a
-								href="https://www.facebook.com"
+								href="https://www.facebook.com/arduinodayph"
 								target="_blank"
 								rel="noopener noreferrer"
 							className="w-11 h-11 rounded-full bg-gray-300 hover:bg-[#00D9FF] transition-colors duration-300 flex items-center justify-center"
@@ -49,7 +49,7 @@ const Footer = () => {
 								</svg>
 							</a>
 							<a
-								href="https://www.linkedin.com"
+								href="https://www.linkedin.com/company/arduinodayph"
 								target="_blank"
 								rel="noopener noreferrer"
 							className="w-11 h-11 rounded-full bg-gray-300 hover:bg-[#00D9FF] transition-colors duration-300 flex items-center justify-center"
@@ -75,7 +75,7 @@ const Footer = () => {
 								</svg>
 							</a>
 							<a
-								href="mailto:contact@arduinoday.ph"
+								href="mailto:arduinodayph@gmail.com"
 							className="w-11 h-11 rounded-full bg-gray-300 hover:bg-[#00D9FF] transition-colors duration-300 flex items-center justify-center"
 						>
 							<svg width="22" height="22" viewBox="0 0 24 24" fill="none">
@@ -120,6 +120,26 @@ const Footer = () => {
 							<li>
 								<a href="#faq" className="hover:text-[#00D9FF] transition-colors duration-300">
 									FAQ
+								</a>
+							</li>
+							<li>
+								<a href="https://www.facebook.com/arduinodayph" target="_blank" rel="noopener noreferrer" className="hover:text-[#00D9FF] transition-colors duration-300">
+									Facebook
+								</a>
+							</li>
+							<li>
+								<a href="https://www.tiktok.com/@arduinodayph" target="_blank" rel="noopener noreferrer" className="hover:text-[#00D9FF] transition-colors duration-300">
+									TikTok
+								</a>
+							</li>
+							<li>
+								<a href="https://www.linkedin.com/company/arduinodayph" target="_blank" rel="noopener noreferrer" className="hover:text-[#00D9FF] transition-colors duration-300">
+									LinkedIn
+								</a>
+							</li>
+							<li>
+								<a href="mailto:arduinodayph@gmail.com" className="hover:text-[#00D9FF] transition-colors duration-300">
+									Email Us
 								</a>
 							</li>
 						</ul>
