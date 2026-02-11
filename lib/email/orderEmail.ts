@@ -71,8 +71,31 @@ const buildItemsListHtml = (items: OrderItemRecord[] | null) => {
   return listItems || "<li>No items</li>";
 };
 
-const loadEmailTemplate = async () => {
-  const templatePath = path.join(process.cwd(), "public", "adph.html");
+const getStatusTemplateFilename = (status: string) => {
+  const statusKey = status.trim().toLowerCase();
+  switch (statusKey) {
+    case "confirmed":
+      return "adph_confirmed.html";
+    case "ready":
+      return "adph_ready.html";
+    case "shipped":
+      return "adph_shipped.html";
+    case "delivered":
+      return "adph_delivered.html";
+    case "cancelled":
+      return "adph_cancelled.html";
+    case "pending":
+    default:
+      return "adph.html";
+  }
+};
+
+const loadEmailTemplate = async (status: string) => {
+  const templatePath = path.join(
+    process.cwd(),
+    "public",
+    getStatusTemplateFilename(status),
+  );
   return readFile(templatePath, "utf8");
 };
 
@@ -123,18 +146,55 @@ export const sendOrderStatusEmail = async ({
 
   const itemsSummary = buildItemsSummary(order.items);
   const statusLabel = status.toUpperCase();
-  const introLine =
-    "We are delighted to confirm that your Arduino Day Official Merchandise order has been successfully placed.";
-  const prepLine =
-    "Our team is currently preparing your items with the utmost care.";
-  const textLines = [
-    introLine,
-    "",
-    prepLine,
+  const statusMessages: Record<
+    string,
+    { introLine: string; detailLine?: string }
+  > = {
+    pending: {
+      introLine:
+        "We are delighted to confirm that your Arduino Day Official Merchandise order has been successfully placed.",
+      detailLine: "Our team is currently preparing your items with the utmost care.",
+    },
+    confirmed: {
+      introLine:
+        "Your Arduino Day Official Merchandise order is confirmed and in our system.",
+      detailLine: "We are now preparing everything for fulfillment.",
+    },
+    ready: {
+      introLine:
+        "Good news! Your Arduino Day Official Merchandise order is ready.",
+      detailLine:
+        "If you selected pickup, you can now collect it. If delivery is needed, we will send shipping details once dispatched.",
+    },
+    shipped: {
+      introLine:
+        "Your Arduino Day Official Merchandise order has been shipped and is on its way.",
+      detailLine:
+        "We will share tracking details if available. Delivery times may vary by location.",
+    },
+    delivered: {
+      introLine:
+        "Your Arduino Day Official Merchandise order has been delivered.",
+      detailLine:
+        "We hope you enjoy your items. If anything is missing or incorrect, please reply to this email so we can help.",
+    },
+    cancelled: {
+      introLine: "Your Arduino Day Official Merchandise order has been cancelled.",
+      detailLine:
+        "If this was unexpected or you need help, please reply to this email and we will assist you.",
+    },
+  };
+  const statusKey = status.trim().toLowerCase();
+  const statusMessage = statusMessages[statusKey] ?? statusMessages.pending;
+  const textLines = [statusMessage.introLine];
+  if (statusMessage.detailLine) {
+    textLines.push("", statusMessage.detailLine);
+  }
+  textLines.push(
     "",
     `Order Reference: ${order.id}`,
     `Items: ${itemsSummary}`,
-  ];
+  );
   if (includeStatusLine) {
     textLines.push(`Status: ${statusLabel}`);
   }
@@ -142,7 +202,7 @@ export const sendOrderStatusEmail = async ({
     textLines.push("", fulfillmentNote);
   }
   const textBody = textLines.join("\n");
-  const template = await loadEmailTemplate();
+  const template = await loadEmailTemplate(status);
   const statusBlock = includeStatusLine
     ? `
       <div
