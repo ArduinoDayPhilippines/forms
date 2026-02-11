@@ -79,9 +79,11 @@ const loadEmailTemplate = async () => {
 export const sendOrderStatusEmail = async ({
   order,
   status,
+  includeStatusLine = true,
 }: {
   order: OrderEmailRecord;
   status: string;
+  includeStatusLine?: boolean;
 }) => {
   const senderEmail = process.env.ARDUINODAYPH_SENDER_EMAIL;
   const senderPassword = process.env.ARDUINODAYPH_SENDER_PASSWORD;
@@ -109,14 +111,57 @@ export const sendOrderStatusEmail = async ({
   });
 
   const itemsSummary = buildItemsSummary(order.items);
-  const statusLine = `Your order with an order id of ${order.id} has updated with a status of ${status}.`;
-  const textBody = `${statusLine}\n\nItems: ${itemsSummary}`;
+  const statusLabel = status.toUpperCase();
+  const introLine =
+    "We are delighted to confirm that your Arduino Day Official Merchandise order has been successfully placed.";
+  const prepLine =
+    "Our team is currently preparing your items with the utmost care.";
+  const textLines = [
+    introLine,
+    "",
+    prepLine,
+    "",
+    `Order Reference: ${order.id}`,
+    `Items: ${itemsSummary}`,
+  ];
+  if (includeStatusLine) {
+    textLines.push(`Status: ${statusLabel}`);
+  }
+  const textBody = textLines.join("\n");
   const template = await loadEmailTemplate();
+  const statusBlock = includeStatusLine
+    ? `
+      <div
+        style="
+          margin-top: 14px;
+          padding: 10px 12px;
+          border-radius: 10px;
+          background: #e6f4f2;
+          border: 1px solid #c9e7e2;
+        "
+      >
+        <span style="font-size: 12px; color: #285e5a; letter-spacing: 0.6px;">
+          STATUS
+        </span>
+        <div
+          style="
+            margin-top: 4px;
+            font-size: 14px;
+            font-weight: 700;
+            color: #003333;
+            letter-spacing: 1px;
+          "
+        >
+          ${escapeHtml(statusLabel)}
+        </div>
+      </div>
+    `
+    : "";
   const htmlBody = template
     .replace("{recipient}", escapeHtml(order.full_name ?? "Customer"))
     .replace("{order_id}", escapeHtml(order.id))
-    .replace("{order_status}", escapeHtml(status))
-    .replace("{order_items}", buildItemsListHtml(order.items));
+    .replace("{order_items}", escapeHtml(itemsSummary))
+    .replace("{status_block}", statusBlock);
 
   await transporter.sendMail({
     from: `${senderName} <${senderEmail}>`,

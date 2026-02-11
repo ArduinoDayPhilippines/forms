@@ -100,35 +100,77 @@
                 style="
                   font-size: 15px;
                   line-height: 1.8;
-                  margin: 0 0 24px 0;
+                  margin: 0 0 16px 0;
                   color: #4a4a4a;
                 "
               >
-                Your order with an order id of <strong>{order_id}</strong> has
-                updated with a status of <strong>{order_status}</strong>.
+                We are delighted to confirm that your Arduino Day Official
+                Merchandise order has been successfully placed.
               </p>
 
               <p
                 style="
                   font-size: 15px;
                   line-height: 1.8;
-                  margin: 0 0 8px 0;
+                  margin: 0 0 24px 0;
                   color: #4a4a4a;
                 "
               >
-                <strong>Items:</strong>
+                Our team is currently preparing your items with the utmost
+                care.
               </p>
-              <ul
+
+              <table
+                width="100%"
+                cellpadding="0"
+                cellspacing="0"
                 style="
-                  margin: 0 0 24px 20px;
-                  padding: 0;
-                  font-size: 15px;
-                  line-height: 1.8;
-                  color: #4a4a4a;
+                  border-collapse: collapse;
+                  margin: 0 0 24px 0;
+                  border: 1px solid #e7eceb;
+                  border-radius: 12px;
+                  overflow: hidden;
                 "
               >
-                {order_items}
-              </ul>
+                <tr>
+                  <td
+                    style="
+                      background-color: #f8fbfb;
+                      padding: 16px 18px;
+                      font-family: &quot;IBM Plex Sans&quot;, sans-serif;
+                      color: #2c2c2c;
+                    "
+                  >
+                    <p style="margin: 0 0 8px 0; font-size: 14px;">
+                      <strong>Order Reference:</strong>
+                    </p>
+                    <p
+                      style="
+                        margin: 0 0 12px 0;
+                        font-size: 15px;
+                        letter-spacing: 0.3px;
+                        color: #003333;
+                      "
+                    >
+                      {order_id}
+                    </p>
+                    <p style="margin: 0 0 8px 0; font-size: 14px;">
+                      <strong>Items:</strong>
+                    </p>
+                    <p
+                      style="
+                        margin: 0;
+                        font-size: 14px;
+                        line-height: 1.7;
+                        color: #4a4a4a;
+                      "
+                    >
+                      {order_items}
+                    </p>
+                    {status_block}
+                  </td>
+                </tr>
+              </table>
 
               <!-- Signature -->
               <p

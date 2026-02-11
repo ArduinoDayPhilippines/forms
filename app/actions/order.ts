@@ -63,6 +63,7 @@ export const createOrderAction = async (
   const emailResult = await sendOrderStatusEmail({
     order: data as OrderEmailRecord,
     status: "pending",
+    includeStatusLine: input.fulfillment_method === "delivery",
   });
 
   if (!emailResult.ok) {
