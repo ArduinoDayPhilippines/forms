@@ -4,7 +4,7 @@ insert into public.merch_items (name, tag, image, tone, price, sizes, sort_order
 values
   (
     'Arduino Swags Pack',
-    'Includes: Mouse Pad Small, Badge Pin, Magnet, Sticker',
+    'Includes: Mouse Pad Small (Black or White), Badge Pin, Magnet, Sticker',
     '/arduino_swags_pack/adph-swags.png',
     'from-amber-400/30 to-black/10',
     199,
@@ -22,7 +22,7 @@ values
   ),
   (
     'Arduino Gear Set',
-    'Includes: Vest, Mouse Pad Small, Badge Pin, Magnet, Sticker',
+    'Includes: Vest, Mouse Pad Small (Black or White), Badge Pin, Magnet, Sticker',
     '/arduino_gear_set/arduino-gear.png',
     'from-sky-500/35 to-black/10',
     499,
@@ -31,7 +31,7 @@ values
   ),
   (
     'Arduino Tech Set',
-    'Includes: Mouse Pad Small, Tote Bag, Mug, Badge Pin, Magnet, Sticker',
+    'Includes: Mouse Pad Small (Black or White), Tote Bag, Mug, Badge Pin, Magnet, Sticker',
     '/arduino_tech_set/arduino-tech.png',
     'from-cyan-500/30 to-black/10',
     399,
@@ -58,7 +58,7 @@ values
   ),
   (
     'Arduino Creator Bundle',
-    'Includes: Shirt, Mouse Pad Small, Tote Bag, Mug, Badge Pin, Magnet, Sticker',
+    'Includes: Shirt, Mouse Pad Small (Black or White), Tote Bag, Mug, Badge Pin, Magnet, Sticker',
     '/arduino_creator_bundle/arduino-creator.png',
     'from-indigo-500/30 to-black/10',
     699,
@@ -85,7 +85,7 @@ values
   ),
   (
     'Arduino Ultimate 2026 Kit',
-    'Includes: Shirt, Vest, Cap, Mouse Pad Big, Mouse Pad Small, Tote Bag, Mug, Badge Pin, Magnet, Sticker',
+    'Includes: Shirt, Vest, Cap, Mouse Pad Big, Mouse Pad Small (Black or White), Tote Bag, Mug, Badge Pin, Magnet, Sticker',
     '/arduino_ultimate_2026_kit/arduino-ultimate.png',
     'from-rose-500/30 to-black/10',
     1399,
@@ -129,13 +129,22 @@ values
     140
   ),
   (
-    'Mouse Pad Small',
+    'Mouse Pad Small (Black)',
     'Individual Item',
     '/mouse_pad/adph-mouse-pad-small.png',
     'from-cyan-500/30 to-black/10',
     130,
     array['One Size'],
-    150
+    151
+  ),
+  (
+    'Mouse Pad Small (White)',
+    'Individual Item',
+    '/mouse_pad/adph-mouse-pad-small.png',
+    'from-cyan-500/30 to-black/10',
+    130,
+    array['One Size'],
+    152
   ),
   (
     'Tote Bag',

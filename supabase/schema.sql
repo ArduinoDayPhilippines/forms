@@ -8,23 +8,18 @@ begin
     where typname = 'order_status'
       and typnamespace = 'public'::regnamespace
   ) then
-    create type public.order_status as enum ('pending', 'confirmed', 'packing', 'shipped', 'intransit', 'delivered');
+    create type public.order_status as enum (
+      'pending',
+      'confirmed',
+      'ready',
+      'shipped',
+      'delivered',
+      'cancelled',
+      'paid',
+      'packing',
+      'intransit'
+    );
   end if;
-end $$;
-
-do $$
-begin
-  begin
-    alter type public.order_status add value if not exists 'paid';
-  exception
-    when duplicate_object then null;
-  end;
-
-  begin
-    alter type public.order_status add value if not exists 'cancelled';
-  exception
-    when duplicate_object then null;
-  end;
 end $$;
 
 create table if not exists public.merch_items (
@@ -57,6 +52,7 @@ create table if not exists public.orders (
   total_weight numeric(10,2) not null default 0,
   weight_unit text not null default 'g',
   status public.order_status not null default 'pending',
+  tracking_id text,
   created_at timestamptz not null default now()
 );
 
@@ -66,6 +62,7 @@ alter table public.orders add column if not exists delivery_fee numeric(10,2) no
 alter table public.orders add column if not exists total_amount numeric(10,2) not null default 0;
 alter table public.orders add column if not exists total_weight numeric(10,2) not null default 0;
 alter table public.orders add column if not exists weight_unit text not null default 'g';
+alter table public.orders add column if not exists tracking_id text;
 alter table public.orders drop column if exists item_id;
 alter table public.orders drop column if exists item_name;
 alter table public.orders drop column if exists size;
@@ -133,7 +130,7 @@ insert into public.merch_items (name, tag, image, tone, price, weight_grams, siz
 values
   (
     'Arduino Swags Pack',
-    'Includes: Mouse Pad Small, Badge Pin, Magnet, Sticker',
+    'Includes: Mouse Pad Small (Black or White), Badge Pin, Magnet, Sticker',
     '/arduino_swags_pack/adph-swags.png',
     'from-amber-400/30 to-black/10',
     199,
@@ -153,7 +150,7 @@ values
   ),
   (
     'Arduino Gear Set',
-    'Includes: Vest, Mouse Pad Small, Badge Pin, Magnet, Sticker',
+    'Includes: Vest, Mouse Pad Small (Black or White), Badge Pin, Magnet, Sticker',
     '/arduino_gear_set/arduino-gear.png',
     'from-sky-500/35 to-black/10',
     499,
@@ -163,7 +160,7 @@ values
   ),
   (
     'Arduino Tech Set',
-    'Includes: Mouse Pad Small, Tote Bag, Mug, Badge Pin, Magnet, Sticker',
+    'Includes: Mouse Pad Small (Black or White), Tote Bag, Mug, Badge Pin, Magnet, Sticker',
     '/arduino_tech_set/arduino-tech.png',
     'from-cyan-500/30 to-black/10',
     399,
@@ -193,7 +190,7 @@ values
   ),
   (
     'Arduino Creator Bundle',
-    'Includes: Shirt, Mouse Pad Small, Tote Bag, Mug, Badge Pin, Magnet, Sticker',
+    'Includes: Shirt, Mouse Pad Small (Black or White), Tote Bag, Mug, Badge Pin, Magnet, Sticker',
     '/arduino_creator_bundle/arduino-creator.png',
     'from-indigo-500/30 to-black/10',
     699,
@@ -223,7 +220,7 @@ values
   ),
   (
     'Arduino Ultimate 2026 Kit',
-    'Includes: Shirt, Vest, Cap, Mouse Pad Big, Mouse Pad Small, Tote Bag, Mug, Badge Pin, Magnet, Sticker',
+    'Includes: Shirt, Vest, Cap, Mouse Pad Big, Mouse Pad Small (Black or White), Tote Bag, Mug, Badge Pin, Magnet, Sticker',
     '/arduino_ultimate_2026_kit/arduino-ultimate.png',
     'from-rose-500/30 to-black/10',
     1399,
@@ -272,14 +269,24 @@ values
     140
   ),
   (
-    'Mouse Pad Small',
+    'Mouse Pad Small (Black)',
     'Individual Item',
     '/mouse_pad/adph-mouse-pad-small.png',
     'from-cyan-500/30 to-black/10',
     130,
     100,
     array['One Size'],
-    150
+    151
+  ),
+  (
+    'Mouse Pad Small (White)',
+    'Individual Item',
+    '/mouse_pad/adph-mouse-pad-small.png',
+    'from-cyan-500/30 to-black/10',
+    130,
+    100,
+    array['One Size'],
+    152
   ),
   (
     'Tote Bag',

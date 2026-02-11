@@ -3,6 +3,7 @@
 import { supabaseAdmin } from "../../lib/supabase/admin";
 import {
   sendOrderStatusEmail,
+  sendTrackingIdEmail,
   type OrderEmailRecord,
 } from "../../lib/email/orderEmail";
 
@@ -26,6 +27,7 @@ type UpdateOrderInput = {
   phone?: string;
   address?: string;
   items?: unknown[];
+  tracking_id?: string | null;
 };
 
 type UpdateOrderResult =
@@ -63,7 +65,7 @@ export const getOrdersAction = async (token: string) => {
   const { data, error } = await supabaseAdmin
     .from("orders")
     .select(
-      "id,full_name,email,phone,address,payment_method,gcash_reference,gcash_receipt_url,items,delivery_fee,total_amount,status,fulfillment_method,created_at",
+      "id,full_name,email,phone,address,payment_method,gcash_reference,gcash_receipt_url,items,delivery_fee,total_amount,status,fulfillment_method,tracking_id,created_at",
     )
     .order("created_at", { ascending: false });
 
@@ -89,7 +91,7 @@ export const updateOrderAction = async (
 
   const { data: existingOrder, error: existingError } = await supabaseAdmin
     .from("orders")
-    .select("id,email,full_name,items,status")
+    .select("id,email,full_name,items,status,tracking_id,fulfillment_method")
     .eq("id", updatesInput.id)
     .maybeSingle();
 
@@ -103,6 +105,9 @@ export const updateOrderAction = async (
   if (updatesInput.phone) updates.phone = updatesInput.phone;
   if (updatesInput.address) updates.address = updatesInput.address;
   if (updatesInput.items) updates.items = updatesInput.items;
+  if (updatesInput.tracking_id !== undefined) {
+    updates.tracking_id = updatesInput.tracking_id;
+  }
 
   const { error } = await supabaseAdmin
     .from("orders")
@@ -124,6 +129,26 @@ export const updateOrderAction = async (
 
     if (!emailResult.ok) {
       return { ok: true, emailError: emailResult.error };
+    }
+  }
+
+  const trackingIdChanged =
+    updatesInput.tracking_id !== undefined &&
+    String(updatesInput.tracking_id ?? "") !==
+      String(existingOrder.tracking_id ?? "");
+
+  if (
+    trackingIdChanged &&
+    updatesInput.tracking_id &&
+    existingOrder.fulfillment_method === "delivery"
+  ) {
+    const trackingEmailResult = await sendTrackingIdEmail({
+      order: existingOrder as OrderEmailRecord,
+      trackingId: updatesInput.tracking_id,
+    });
+
+    if (!trackingEmailResult.ok) {
+      return { ok: true, emailError: trackingEmailResult.error };
     }
   }
 

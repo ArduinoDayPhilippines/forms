@@ -76,6 +76,15 @@ const loadEmailTemplate = async () => {
   return readFile(templatePath, "utf8");
 };
 
+const loadTrackingTemplate = async () => {
+  const templatePath = path.join(
+    process.cwd(),
+    "public",
+    "adph_trackingid.html",
+  );
+  return readFile(templatePath, "utf8");
+};
+
 export const sendOrderStatusEmail = async ({
   order,
   status,
@@ -204,6 +213,68 @@ export const sendOrderStatusEmail = async ({
     from: `${senderName} <${senderEmail}>`,
     to: order.email,
     subject: `Order ${order.id} status update`,
+    text: textBody,
+    html: htmlBody,
+  });
+
+  return { ok: true };
+};
+
+export const sendTrackingIdEmail = async ({
+  order,
+  trackingId,
+}: {
+  order: OrderEmailRecord;
+  trackingId: string;
+}) => {
+  const senderEmail = process.env.ARDUINODAYPH_SENDER_EMAIL;
+  const senderPassword = process.env.ARDUINODAYPH_SENDER_PASSWORD;
+  const senderName =
+    process.env.ARDUINODAYPH_SENDER_NAME ?? "Arduino Day Philippines";
+
+  if (!senderEmail || !senderPassword) {
+    return { ok: false, error: "Missing SMTP sender credentials." };
+  }
+
+  const smtpHost = process.env.ARDUINODAYPH_SMTP_HOST ?? "smtp.gmail.com";
+  const smtpPort = Number(process.env.ARDUINODAYPH_SMTP_PORT ?? 465);
+  const smtpSecure =
+    (process.env.ARDUINODAYPH_SMTP_SECURE ?? "true").toLowerCase() ===
+    "true";
+
+  const transporter = nodemailer.createTransport({
+    host: smtpHost,
+    port: smtpPort,
+    secure: smtpSecure,
+    auth: {
+      user: senderEmail,
+      pass: senderPassword,
+    },
+  });
+
+  const itemsSummary = buildItemsSummary(order.items);
+  const trackingLabel = trackingId.trim();
+  const textLines = [
+    "Your delivery order is on the way.",
+    "",
+    `Order Reference: ${order.id}`,
+    `Items: ${itemsSummary}`,
+    `Tracking ID: ${trackingLabel}`,
+  ];
+  const textBody = textLines.join("\n");
+  const template = await loadTrackingTemplate();
+  const htmlBody = template
+    .replace("{recipient}", escapeHtml(order.full_name ?? "Customer"))
+    .replace("{order_id}", escapeHtml(order.id))
+    .replace("{order_items}", escapeHtml(itemsSummary))
+    .replace("{tracking_id}", escapeHtml(trackingLabel))
+    .replace("{status_block}", "")
+    .replace("{fulfillment_note}", "");
+
+  await transporter.sendMail({
+    from: `${senderName} <${senderEmail}>`,
+    to: order.email,
+    subject: `Tracking ID for order ${order.id}`,
     text: textBody,
     html: htmlBody,
   });

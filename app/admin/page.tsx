@@ -30,14 +30,16 @@ type OrderItem = {
   totalAmount: number;
   status:
     | "pending"
-    | "paid"
     | "confirmed"
-    | "packing"
+    | "ready"
     | "shipped"
-    | "intransit"
     | "delivered"
-    | "cancelled";
+    | "cancelled"
+    | "paid"
+    | "packing"
+    | "intransit";
   fulfillment: "delivery" | "pickup";
+  trackingId: string | null;
   createdAt: string;
 };
 
@@ -65,19 +67,51 @@ type OrderRecord = {
   total_amount: number | null;
   status: OrderItem["status"];
   fulfillment_method: OrderItem["fulfillment"];
+  tracking_id: string | null;
   created_at: string;
 };
 
-const statusStyles: Record<OrderItem["status"], string> = {
+const statusOptions = [
+  "pending",
+  "confirmed",
+  "ready",
+  "shipped",
+  "delivered",
+  "cancelled",
+] as const;
+
+type StatusOption = (typeof statusOptions)[number];
+type LegacyStatus = "paid" | "packing" | "intransit";
+
+const statusStyles: Record<StatusOption, string> = {
   pending: "bg-[#E47128]/20 text-[#E47128] border-[#E47128]/40",
-  paid: "bg-[#00878F]/20 text-[#00878F] border-[#00878F]/40",
   confirmed: "bg-sky-400/20 text-sky-200 border-sky-400/40",
-  packing: "bg-indigo-400/20 text-indigo-200 border-indigo-400/40",
+  ready: "bg-amber-400/20 text-amber-200 border-amber-400/40",
   shipped: "bg-blue-400/20 text-blue-200 border-blue-400/40",
-  intransit: "bg-slate-400/20 text-slate-200 border-slate-400/40",
   delivered: "bg-[#21935B]/20 text-[#21935B] border-[#21935B]/40",
   cancelled: "bg-red-400/20 text-red-200 border-red-400/40",
 };
+
+const legacyStatusStyles: Record<LegacyStatus, string> = {
+  paid: "bg-[#00878F]/20 text-[#00878F] border-[#00878F]/40",
+  packing: "bg-indigo-400/20 text-indigo-200 border-indigo-400/40",
+  intransit: "bg-slate-400/20 text-slate-200 border-slate-400/40",
+};
+
+const isLegacyStatus = (status: OrderItem["status"]): status is LegacyStatus =>
+  !statusOptions.includes(status as StatusOption);
+
+const getStatusLabel = (status: OrderItem["status"]) => {
+  if (status === "intransit") return "In Transit (legacy)";
+  if (status === "paid") return "Paid (legacy)";
+  if (status === "packing") return "Packing (legacy)";
+  return status.charAt(0).toUpperCase() + status.slice(1);
+};
+
+const getStatusStyle = (status: OrderItem["status"]) =>
+  isLegacyStatus(status)
+    ? legacyStatusStyles[status]
+    : statusStyles[status];
 
 export default function AdminPage() {
   const [loggedIn, setLoggedIn] = useState(false);
@@ -88,10 +122,16 @@ export default function AdminPage() {
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [ordersError, setOrdersError] = useState<string | null>(null);
   const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null);
+  const [trackingUpdatingId, setTrackingUpdatingId] = useState<string | null>(
+    null,
+  );
   const [editingOrder, setEditingOrder] = useState<OrderItem | null>(null);
   const [viewingReceipt, setViewingReceipt] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [trackingDrafts, setTrackingDrafts] = useState<
+    Record<string, string>
+  >({});
 
   const loadOrders = async () => {
     setOrdersLoading(true);
@@ -170,6 +210,7 @@ export default function AdminPage() {
             totalAmount,
             status: order.status,
             fulfillment: order.fulfillment_method,
+            trackingId: order.tracking_id,
             createdAt: order.created_at,
           };
         }),
@@ -199,9 +240,13 @@ export default function AdminPage() {
     return orders.filter((order) => {
       const matchesQuery =
         !normalized ||
-        [order.id, order.name, order.email, order.itemsSummary].some((f) =>
-          f?.toLowerCase().includes(normalized),
-        );
+        [
+          order.id,
+          order.name,
+          order.email,
+          order.itemsSummary,
+          order.trackingId ?? "",
+        ].some((f) => f?.toLowerCase().includes(normalized));
       const matchesStatus =
         statusFilter === "all" || order.status === statusFilter;
       return matchesQuery && matchesStatus;
@@ -241,7 +286,7 @@ export default function AdminPage() {
 
   const handleStatusChange = async (
     orderId: string,
-    status: OrderItem["status"],
+    status: StatusOption,
   ) => {
     setStatusUpdatingId(orderId);
     const { data: sessionData } = await supabase.auth.getSession();
@@ -287,6 +332,7 @@ export default function AdminPage() {
       address: updatedOrder.address,
       items: updatedOrder.items,
       status: updatedOrder.status, // Preserve status or allow updates if needed
+      tracking_id: updatedOrder.trackingId ?? null,
     });
 
     if (result.ok) {
@@ -300,6 +346,48 @@ export default function AdminPage() {
     } else {
       alert(result.error || "Failed to save order");
     }
+  };
+
+  const handleTrackingSave = async (order: OrderItem, nextValue: string) => {
+    if (order.fulfillment !== "delivery") return;
+    const trimmed = nextValue.trim();
+    const current = String(order.trackingId ?? "");
+    if (trimmed === current) return;
+
+    setTrackingUpdatingId(order.id);
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+
+    if (!token) {
+      setOrdersError("Admin session expired. Please log in again.");
+      setTrackingUpdatingId(null);
+      return;
+    }
+
+    const result = await updateOrderAction(token ?? "", {
+      id: order.id,
+      tracking_id: trimmed ? trimmed : null,
+    });
+
+    if (result.ok) {
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === order.id ? { ...o, trackingId: trimmed || null } : o,
+        ),
+      );
+      setTrackingDrafts((prev) => {
+        const next = { ...prev };
+        delete next[order.id];
+        return next;
+      });
+      if (result.emailError) {
+        setOrdersError(result.emailError);
+      }
+    } else {
+      setOrdersError(result.error || "Unable to update tracking ID.");
+    }
+
+    setTrackingUpdatingId(null);
   };
 
   const handleExportCsv = () => {
@@ -316,6 +404,7 @@ export default function AdminPage() {
       "GCash Ref",
       "Receipt URL",
       "Fulfillment",
+      "Tracking ID",
       "Status",
       "Date",
     ];
@@ -332,6 +421,7 @@ export default function AdminPage() {
       `"${o.gcashReference || ""}"`,
       o.gcashReceiptUrl || "",
       o.fulfillment,
+      o.trackingId || "",
       o.status,
       o.createdAt,
     ]);
@@ -354,6 +444,9 @@ export default function AdminPage() {
           day: "2-digit",
         });
   };
+
+  const getTrackingValue = (order: OrderItem) =>
+    trackingDrafts[order.id] ?? order.trackingId ?? "";
 
   return (
     <div className="relative min-h-screen bg-[#050b0e] text-white">
@@ -430,11 +523,9 @@ export default function AdminPage() {
                     className="rounded-full bg-white/10 px-4 py-2 text-sm"
                   >
                     <option value="all">All Status</option>
-                    {Object.keys(statusStyles).map((s) => (
+                    {statusOptions.map((s) => (
                       <option key={s} value={s}>
-                        {s === "intransit"
-                          ? "In Transit"
-                          : s.charAt(0).toUpperCase() + s.slice(1)}
+                        {s.charAt(0).toUpperCase() + s.slice(1)}
                       </option>
                     ))}
                   </select>
@@ -464,6 +555,9 @@ export default function AdminPage() {
                       <th className="pb-4 whitespace-nowrap pr-4">
                         Fulfillment
                       </th>
+                      <th className="pb-4 whitespace-nowrap pr-4">
+                        Tracking ID
+                      </th>
                       <th className="pb-4 whitespace-nowrap pr-4">Status</th>
                       <th className="pb-4 whitespace-nowrap pr-4">Date</th>
                       <th className="pb-4 whitespace-nowrap">Actions</th>
@@ -473,7 +567,7 @@ export default function AdminPage() {
                     {ordersLoading ? (
                       <tr>
                         <td
-                          colSpan={12}
+                          colSpan={13}
                           className="py-6 text-center text-white/60"
                         >
                           Loading orders...
@@ -482,7 +576,7 @@ export default function AdminPage() {
                     ) : ordersError ? (
                       <tr>
                         <td
-                          colSpan={12}
+                          colSpan={13}
                           className="py-6 text-center text-red-300"
                         >
                           {ordersError}
@@ -559,25 +653,98 @@ export default function AdminPage() {
                           {order.fulfillment}
                         </td>
                         <td className="py-4 whitespace-nowrap pr-4">
-                          <select
-                            value={order.status}
-                            onChange={(e) =>
-                              handleStatusChange(
-                                order.id,
-                                e.target.value as OrderItem["status"],
-                              )
-                            }
-                            disabled={statusUpdatingId === order.id}
-                            className={`rounded-full border px-3 py-1 text-[10px] font-bold uppercase ${statusStyles[order.status]}`}
-                          >
-                            {Object.keys(statusStyles).map((s) => (
-                              <option key={s} value={s} className="bg-black">
-                                {s === "intransit"
-                                  ? "In Transit"
-                                  : s.charAt(0).toUpperCase() + s.slice(1)}
-                              </option>
-                            ))}
-                          </select>
+                          {order.fulfillment === "delivery" ? (
+                            <div className="flex items-center gap-2">
+                              <input
+                                value={getTrackingValue(order)}
+                                onChange={(e) =>
+                                  setTrackingDrafts((prev) => ({
+                                    ...prev,
+                                    [order.id]: e.target.value,
+                                  }))
+                                }
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    handleTrackingSave(
+                                      order,
+                                      e.currentTarget.value,
+                                    );
+                                  }
+                                }}
+                                disabled={trackingUpdatingId === order.id}
+                                className="w-40 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-xs"
+                                placeholder="Enter ID"
+                              />
+                              <button
+                                onClick={() =>
+                                  handleTrackingSave(order, getTrackingValue(order))
+                                }
+                                disabled={
+                                  trackingUpdatingId === order.id ||
+                                  getTrackingValue(order).trim() ===
+                                    String(order.trackingId ?? "")
+                                }
+                                className="rounded-full border border-white/10 px-3 py-1 text-[10px] font-bold uppercase text-white/80 hover:border-white/30 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                              >
+                                Send
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-white/20 text-xs">-</span>
+                          )}
+                        </td>
+                        <td className="py-4 whitespace-nowrap pr-4">
+                          {isLegacyStatus(order.status) ? (
+                            <div className="flex flex-col gap-2">
+                              <span
+                                className={`inline-flex w-fit rounded-full border px-3 py-1 text-[10px] font-bold uppercase ${getStatusStyle(order.status)}`}
+                              >
+                                {getStatusLabel(order.status)}
+                              </span>
+                              <select
+                                value=""
+                                onChange={(e) =>
+                                  handleStatusChange(
+                                    order.id,
+                                    e.target.value as StatusOption,
+                                  )
+                                }
+                                disabled={statusUpdatingId === order.id}
+                                className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-bold uppercase"
+                              >
+                                <option value="" disabled>
+                                  Set status
+                                </option>
+                                {statusOptions.map((s) => (
+                                  <option
+                                    key={s}
+                                    value={s}
+                                    className="bg-black"
+                                  >
+                                    {s.charAt(0).toUpperCase() + s.slice(1)}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          ) : (
+                            <select
+                              value={order.status}
+                              onChange={(e) =>
+                                handleStatusChange(
+                                  order.id,
+                                  e.target.value as StatusOption,
+                                )
+                              }
+                              disabled={statusUpdatingId === order.id}
+                              className={`rounded-full border px-3 py-1 text-[10px] font-bold uppercase ${getStatusStyle(order.status)}`}
+                            >
+                              {statusOptions.map((s) => (
+                                <option key={s} value={s} className="bg-black">
+                                  {s.charAt(0).toUpperCase() + s.slice(1)}
+                                </option>
+                              ))}
+                            </select>
+                          )}
                         </td>
                         <td className="py-4 whitespace-nowrap text-white/60 pr-4">
                           {formatDate(order.createdAt)}
